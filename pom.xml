@@ -24,6 +24,7 @@
 
     <modules>
         <module>user_auth_service</module>
+        <module>catalog-service</module>
     </modules>
 
 </project>

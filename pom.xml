@@ -23,10 +23,11 @@
     </properties>
 
     <modules>
-        <module>user_auth_service</module>
+        <module>user-auth-service</module>
         <module>catalog-service</module>
         <module>review-service</module>
         <module>booking-service</module>
+        <module>itinerary-service</module>
     </modules>
 
 </project>

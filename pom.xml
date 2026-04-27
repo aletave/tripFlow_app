@@ -25,6 +25,8 @@
     <modules>
         <module>user_auth_service</module>
         <module>catalog-service</module>
+        <module>review-service</module>
+        <module>booking-service</module>
     </modules>
 
 </project>

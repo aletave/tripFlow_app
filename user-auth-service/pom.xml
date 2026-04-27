@@ -10,7 +10,7 @@
 	</parent>
 
 	<artifactId>user-auth-service</artifactId>
-	<name>user_auth_service</name>
+	<name>user-auth-service</name>
 	<description>Servizio di Autenticazione TripFlow</description>
 
 	<dependencies>

@@ -9,7 +9,7 @@
 		<version>1.0.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>user_auth_service</artifactId>
+	<artifactId>user-auth-service</artifactId>
 	<name>user_auth_service</name>
 	<description>Servizio di Autenticazione TripFlow</description>
 

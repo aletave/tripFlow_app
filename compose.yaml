@@ -1,0 +1,17 @@
+
+#config della connessione al db
+services:
+  postgresql:
+    image: postgres:16
+    container_name: postgresql
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: tripflow_user
+      POSTGRES_PASSWORD: tripflow_password
+      POSTGRES_DB: tripflow_db
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+
+volumes:
+  postgresql_data:

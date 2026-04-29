@@ -49,5 +49,7 @@ public class Attivita {
 
     public Attivita() {}
 
-
+    public void setViaggio(Viaggio viaggio) {
+        this.viaggio = viaggio;
+    }
 }

@@ -43,7 +43,7 @@ public class Itinerary {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // Relazione con itinerary-stops
+    // Relazione con itinerary-stops.
     @OneToMany(
             mappedBy = "itinerary",
             cascade = CascadeType.ALL,

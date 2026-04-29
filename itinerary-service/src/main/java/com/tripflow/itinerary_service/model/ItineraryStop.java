@@ -6,7 +6,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-//si occuperà lombok per fare getter e setter in maniere automatico
+//si occuperà lombok per fare getter e setter in maniere automatico.
 @Getter
 @Setter
 @Entity

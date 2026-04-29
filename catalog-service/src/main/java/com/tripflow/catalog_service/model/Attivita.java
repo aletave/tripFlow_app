@@ -1,4 +1,4 @@
-package com.tripflow.catalog_service.data.entities;
+package com.tripflow.catalog_service.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;

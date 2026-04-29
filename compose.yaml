@@ -1,9 +1,9 @@
 
-#config della connessione al db
+#config della connessione al db to postgresql-itinerary_service
 services:
   postgresql:
     image: postgres:16
-    container_name: postgresql
+    container_name: postgresql-itinerary_service
     ports:
       - "5433:5432"
     environment:

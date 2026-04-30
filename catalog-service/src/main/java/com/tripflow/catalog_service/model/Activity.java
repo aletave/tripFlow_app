@@ -49,4 +49,8 @@ public class Activity {
 
     public Activity() {}
 
+    public void setTrip(Trip t) {
+        this.trip=t;
+    }
+
 }

@@ -1,6 +1,6 @@
 package com.tripflow.booking.data.entities;
 
-import com.tripflow.bookingservice.data.entities.enums.StatoPrenotazione;
+import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -38,7 +38,7 @@ public class Prenotazione {
     private UUID viaggioId;
 
 
-    // SNAPSHOT DATI VIAGGIO
+    //snapshot dati viaggio
     // (congelati al momento della prenotazione)
 
     @Column(name = "viaggio_titolo_snap", nullable = false, length = 255)
@@ -57,7 +57,7 @@ public class Prenotazione {
     private BigDecimal viaggioPrezzoSnap;
 
 
-    // DATI PRENOTAZIONE
+    //dati prenotazione
     @Column(name = "numero_partecipanti", nullable = false)
     private Integer numeroPartecipanti;
 
@@ -74,10 +74,8 @@ public class Prenotazione {
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
-    // ============================================
-    // AUDIT
-    // ============================================
 
+    //AUDIT
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -86,7 +84,7 @@ public class Prenotazione {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // RELAZIONI INTERNE AL SERVIZIO
+    //relazioni
     @OneToMany(mappedBy = "prenotazione", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PrenotazioneAttivita> attivitaSelezionate = new ArrayList<>();
@@ -95,10 +93,8 @@ public class Prenotazione {
     private Pagamento pagamento;
 
 
-    // METODI HELPER
-    // ============================================
-    // SETTER CUSTOM (sovrascrive Lombok per coerenza bidirezionale)
-    // ============================================
+    // metodi helper
+    //setter custom (sovrascrive Lombok per coerenza bidirezionale)
 
     public void setPagamento(Pagamento pagamento) {
         this.pagamento = pagamento;
@@ -107,9 +103,8 @@ public class Prenotazione {
         }
     }
 
-    // ============================================
-    // METODI HELPER PER LA LISTA ATTIVITA
-    // ============================================
+
+    //helper per la lista attività
 
     public void aggiungiAttivita(PrenotazioneAttivita attivita) {
         attivitaSelezionate.add(attivita);

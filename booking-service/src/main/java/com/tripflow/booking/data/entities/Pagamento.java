@@ -1,7 +1,7 @@
 package com.tripflow.booking.data.entities;
 
-import com.tripflow.bookingservice.data.entities.enums.MetodoPagamento;
-import com.tripflow.bookingservice.data.entities.enums.StatoPagamento;
+import com.tripflow.booking.data.entities.enums.MetodoPagamento;
+import com.tripflow.booking.data.entities.enums.StatoPagamento;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,13 +30,13 @@ public class Pagamento {
     private UUID id;
 
 
-    // RELAZIONE CON PRENOTAZIONE (lato padrone, 1:1)
+    //relazione con Prenotazione (lato padrone, 1:1)
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "prenotazione_id", nullable = false, unique = true)
     private Prenotazione prenotazione;
 
 
-    // DATI PAGAMENTO
+    // dati pagamento
 
     @Column(name = "importo", nullable = false, precision = 10, scale = 2)
     private BigDecimal importo;
@@ -49,7 +49,7 @@ public class Pagamento {
     @Column(name = "stato", nullable = false, length = 20)
     private StatoPagamento stato;
 
-    //RIFERIMENTI STRIPE (non dati sensibili)
+    //riferimenti stripe (non dati sensibili)
     //opzionali per design
     @Column(name = "stripe_payment_intent_id", unique = true, length = 100)
     private String stripePaymentIntentId;
@@ -63,10 +63,8 @@ public class Pagamento {
     @Column(name = "data_pagamento")
     private LocalDateTime dataPagamento;
 
-    // ============================================
-    // AUDIT
-    // ============================================
 
+    //audit
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

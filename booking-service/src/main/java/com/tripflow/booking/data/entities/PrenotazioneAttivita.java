@@ -33,17 +33,17 @@ public class PrenotazioneAttivita {
     private UUID id;
 
 
-    // RELAZIONE CON PRENOTAZIONE (lato padrone)
+    //relazione con Prenotazione (lato padrone)
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "prenotazione_id", nullable = false)
     private Prenotazione prenotazione;
 
-    // RIFERIMENTO CROSS-SERVICE
+    //riferimento al service catalog
     @Column(name = "attivita_id", nullable = false)
     private UUID attivitaId;
 
 
-    // SNAPSHOT DATI ATTIVITA
+    // dati attività
     @Column(name = "attivita_nome_snap", nullable = false, length = 255)
     private String attivitaNomeSnap;
 

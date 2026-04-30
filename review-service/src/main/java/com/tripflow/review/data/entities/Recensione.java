@@ -40,7 +40,7 @@ public class Recensione {
     private UUID id;
 
 
-    //RIFERIMENTI CROSS-SERVICE
+    //riferimento al viaggiatore da catalog-service
     @Column(name = "viaggiatore_id", nullable = false)
     private UUID viaggiatoreId;
 
@@ -48,7 +48,7 @@ public class Recensione {
     private UUID prenotazioneId;
 
 
-    // OGGETTO RECENSITO (associazione polimorfica)
+    // oggetto recensito (associazione polimorfica)
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_oggetto", nullable = false, length = 20)
     private TipoOggetto tipoOggetto;
@@ -65,7 +65,7 @@ public class Recensione {
     private String autoreNomeSnap;
 
 
-    //CONTENUTO RECENSIONE
+    //contenuto recensione
     @Column(name = "valutazione", nullable = false)
     private Short valutazione;
 

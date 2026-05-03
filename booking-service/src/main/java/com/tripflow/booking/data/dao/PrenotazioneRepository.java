@@ -17,7 +17,7 @@ import java.util.UUID;
 public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID>,
         JpaSpecificationExecutor<Prenotazione> {
 
-    // query methods (derived queries)
+    // query methods
 
     // "Le mie prenotazioni" — ordinate dalla più recente
     List<Prenotazione> findByViaggiatoreIdOrderByDataPrenotazioneDesc(UUID viaggiatoreId);

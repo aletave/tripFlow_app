@@ -2,8 +2,11 @@ package com.tripflow.catalog_service.dto.request;
 
 import jakarta.validation.constraints.*;
 import lombok.Data;
+import lombok.*;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class TripRequestDTO {
 
     @NotBlank(message = "Il nome del viaggio è obbligatorio")
@@ -32,7 +35,6 @@ public class TripRequestDTO {
 
     private java.util.List<String> images;
 
-    public TripRequestDTO() {}
 
 
 }

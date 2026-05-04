@@ -5,8 +5,6 @@ import lombok.Data;
 import lombok.*;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class TripRequestDTO {
 
     @NotBlank(message = "Il nome del viaggio è obbligatorio")

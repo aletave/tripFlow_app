@@ -8,8 +8,6 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
-@NoArgsConstructor
-@AllArgsConstructor
 public class ActivityRequestDTO {
 
     @NotBlank(message = "Il nome dell'attività è obbligatorio")

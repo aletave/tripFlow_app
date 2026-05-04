@@ -1,4 +1,4 @@
-package com.tripflow.bookingservice.data.dao;
+package com.tripflow.booking.data.dao;
 
 import com.tripflow.booking.data.entities.Prenotazione;
 import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
@@ -8,19 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Helper di Specification per ricerca dinamica su Prenotazione.
- *
- * Pattern d'uso nel service:
- *   Specification<Prenotazione> spec = Specification.where(viaggiatoreEquals(id))
- *                                                   .and(hasStato(stato))
- *                                                   .and(prenotataTra(da, a));
- *   List<Prenotazione> risultati = repository.findAll(spec);
- *
- * Ogni metodo restituisce null se il parametro è null:
- * questo permette di concatenare filtri opzionali senza if/else nel service.
- * Specification.where(null) è gestito correttamente da Spring.
- */
+
 public final class PrenotazioneSpecification {
 
     private PrenotazioneSpecification() {

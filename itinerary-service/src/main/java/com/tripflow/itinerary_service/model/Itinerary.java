@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+//si occuperà lombok per fare getter e setter in maniera automatico.
 @Getter
 @Setter
 @Entity
@@ -67,4 +68,6 @@ public class Itinerary {
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+
 }

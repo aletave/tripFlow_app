@@ -6,7 +6,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-//si occuperà lombok per fare getter e setter in maniere automatico.
+//si occuperà lombok per fare getter e setter in maniera automatico.
 @Getter
 @Setter
 @Entity
@@ -25,7 +25,6 @@ public class ItineraryStop {
 
     @Column(name = "viaggio_id")
     private Long viaggioId;
-
     @Column(name = "attivita_id")
     private Long attivitaId;
 

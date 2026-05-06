@@ -2,7 +2,6 @@ package com.tripflow.catalog_service.exception;
 
 
 import lombok.*;
-
 import java.time.LocalDateTime;
 
 @Data

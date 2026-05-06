@@ -2,7 +2,6 @@ package com.tripflow.catalog_service.dto.request;
 
 import jakarta.validation.constraints.*;
 import lombok.Data;
-import lombok.*;
 
 @Data
 public class TripRequestDTO {

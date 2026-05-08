@@ -17,6 +17,12 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.tripflow.booking.exception.PrenotazioneNotFoundException;
+import com.tripflow.booking.exception.PagamentoNotFoundException;
+import com.tripflow.booking.exception.PagamentoEsistenteException;
+import com.tripflow.booking.exception.StatoPrenotazioneException;
+import com.tripflow.booking.exception.StatoPagamentoException;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

@@ -3,31 +3,30 @@ package com.tripflow.catalog_service.service;
 import com.tripflow.catalog_service.dto.request.ActivityRequestDTO;
 import com.tripflow.catalog_service.dto.response.ActivityResponseDTO;
 import com.tripflow.catalog_service.exception.ResourceNotFoundException;
-import com.tripflow.catalog_service.mapper.ActivityMapper;
 import com.tripflow.catalog_service.model.Activity;
 import com.tripflow.catalog_service.model.Trip;
 import com.tripflow.catalog_service.repository.ActivityRepository;
 import com.tripflow.catalog_service.repository.TripRepository;
 import com.tripflow.catalog_service.repository.ActivitySpecification;
+import org.modelmapper.ModelMapper;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 public class ActivityServiceImpl implements ActivityService {
 
     private final ActivityRepository activityRepository;
     private final TripRepository tripRepository;
-    private final ActivityMapper activityMapper;
+    private final ModelMapper modelMapper;
 
     public ActivityServiceImpl(ActivityRepository activityRepository,
                                TripRepository tripRepository,
-                               ActivityMapper activityMapper) {
-        this.activityMapper=activityMapper;
+                               ModelMapper modelMapper) {
+        this.modelMapper=modelMapper;
         this.activityRepository=activityRepository;
         this.tripRepository=tripRepository;
     }
@@ -38,13 +37,13 @@ public class ActivityServiceImpl implements ActivityService {
         Trip trip = tripRepository.findById(requestDTO.getTripId())
                 .orElseThrow(() -> new ResourceNotFoundException("viaggio non trovato con id: " + requestDTO.getTripId()));
 
-        Activity activity = activityMapper.toEntity(requestDTO);
+        Activity activity = modelMapper.map(requestDTO, Activity.class);
 
         activity.setTrip(trip);
 
         Activity savedActivity = activityRepository.save(activity);
 
-        return activityMapper.toResponseDTO(savedActivity);
+        return modelMapper.map(savedActivity, ActivityResponseDTO.class);
     }
 
     @Override
@@ -53,7 +52,7 @@ public class ActivityServiceImpl implements ActivityService {
         Activity activity = activityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("attività non trovata con id: " + id));
 
-        return activityMapper.toResponseDTO(activity);
+        return modelMapper.map(activity, ActivityResponseDTO.class);
     }
 
     @Override
@@ -62,15 +61,11 @@ public class ActivityServiceImpl implements ActivityService {
         Activity existingActivity = activityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("attività non trovata con id: " + id));
 
-        existingActivity.setName(requestDTO.getName());
-        existingActivity.setDescription(requestDTO.getDescription());
-        existingActivity.setDuration(requestDTO.getDuration());
-        existingActivity.setPrice(requestDTO.getPrice());
-        existingActivity.setAvailableSpots(requestDTO.getAvailableSpots());
+        modelMapper.map(requestDTO, existingActivity);
 
         Activity updatedActivity = activityRepository.save(existingActivity);
 
-        return activityMapper.toResponseDTO(updatedActivity);
+        return modelMapper.map(updatedActivity, ActivityResponseDTO.class);
     }
 
     @Override
@@ -87,8 +82,8 @@ public class ActivityServiceImpl implements ActivityService {
     public List<ActivityResponseDTO> getActivitiesByTripId(UUID tripId) {
         List<Activity> activities = activityRepository.findByTripId(tripId);
         return activities.stream()
-                .map(activityMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .map(activity -> modelMapper.map(activity, ActivityResponseDTO.class))
+                .toList();
     }
 
     @Override
@@ -102,8 +97,8 @@ public class ActivityServiceImpl implements ActivityService {
         List<Activity> activities = activityRepository.findAll(spec);
 
         return activities.stream()
-                .map(activityMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .map(activity -> modelMapper.map(activity, ActivityResponseDTO.class))
+                .toList();
     }
 }
 

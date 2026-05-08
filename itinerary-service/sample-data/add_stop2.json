@@ -1,0 +1,11 @@
+{
+  "stopOrder": 2,
+  "stopType": "CUSTOM",
+  "viaggioId": null,
+  "attivitaId": null,
+  "customTitle": "Fontana di Trevi",
+  "customDescription": "Passeggiata e foto alla fontana",
+  "startDatetime": "2026-06-10T12:30:00",
+  "endDatetime": "2026-06-10T13:30:00",
+  "notes": "Attenzione agli orari di affollamento"
+}

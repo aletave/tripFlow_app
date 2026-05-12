@@ -6,7 +6,6 @@ import com.tripflow.booking.data.entities.Pagamento;
 public final class PagamentoMapper {
 
     private PagamentoMapper() {
-        // utility class
     }
 
     public static PagamentoResponse toResponse(Pagamento p) {

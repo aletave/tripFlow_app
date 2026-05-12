@@ -17,7 +17,6 @@ import java.util.List;
 public final class PrenotazioneMapper {
 
     private PrenotazioneMapper() {
-        // utility class
     }
 
     public static PrenotazioneResponse toResponse(Prenotazione p) {

@@ -1,10 +1,11 @@
-package unical.it.user_auth_service.dto;
+package com.tripflow.user_auth_service.dto.response;
 
 import java.time.LocalDate;
-import unical.it.user_auth_service.model.Role;
+import java.util.UUID;
+import com.tripflow.user_auth_service.model.Role;
 
 public record UserResponse(
-        Long id,
+        UUID id,
         String firstName,
         String lastName,
         String email,

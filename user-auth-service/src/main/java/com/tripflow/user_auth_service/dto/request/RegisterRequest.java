@@ -1,11 +1,11 @@
-package unical.it.user_auth_service.dto;
+package com.tripflow.user_auth_service.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
-import unical.it.user_auth_service.model.Role;
+import com.tripflow.user_auth_service.model.Role;
 
 public record RegisterRequest(
         @NotBlank @Size(max = 100) String firstName,

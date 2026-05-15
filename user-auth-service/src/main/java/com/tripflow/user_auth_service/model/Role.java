@@ -1,4 +1,4 @@
-package unical.it.user_auth_service.model;
+package com.tripflow.user_auth_service.model;
 
 public enum Role {
     TRAVELER,

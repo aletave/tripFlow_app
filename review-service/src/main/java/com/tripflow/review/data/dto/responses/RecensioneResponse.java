@@ -1,10 +1,18 @@
 package com.tripflow.review.data.dto.responses;
 
 import com.tripflow.review.data.entities.enums.TipoOggetto;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class RecensioneResponse {
 
     private UUID id;

@@ -19,10 +19,12 @@ import java.util.UUID;
 public class TripServiceImpl implements TripService {
     private final ModelMapper modelMapper;
     private final TripRepository tripRepository;
+    private final TripEventProducer tripEventProducer;
 
-    public TripServiceImpl(ModelMapper modelMapper, TripRepository tripRepository) {
+    public TripServiceImpl(ModelMapper modelMapper, TripRepository tripRepository, TripEventProducer tripEventProducer) {
         this.modelMapper = modelMapper;
         this.tripRepository = tripRepository;
+        this.tripEventProducer=tripEventProducer;
     }
 
     @Override
@@ -34,9 +36,11 @@ public class TripServiceImpl implements TripService {
 
         Trip savedTrip = tripRepository.save(trip);
 
-        //fare chiamata con rabbitmq appena capisco come si usa
+        TripResponseDTO responseDTO = modelMapper.map(savedTrip, TripResponseDTO.class);
 
-        return modelMapper.map(savedTrip, TripResponseDTO.class);
+        tripEventProducer.sendTripCreatedEvent(responseDTO);
+
+        return responseDTO;
     }
 
     @Override
@@ -62,9 +66,11 @@ public class TripServiceImpl implements TripService {
 
         Trip updatedTrip = tripRepository.save(existingTrip);
 
-        //sempre rabbitmq
+        TripResponseDTO responseDTO= modelMapper.map(updatedTrip, TripResponseDTO.class);
 
-        return modelMapper.map(updatedTrip, TripResponseDTO.class);
+        tripEventProducer.sendTripUpdatedEvent(responseDTO);
+
+        return responseDTO;
     }
 
     @Override
@@ -79,7 +85,8 @@ public class TripServiceImpl implements TripService {
 
         tripRepository.delete(trip);
 
-        //sempre rabbitmq
+        tripEventProducer.sendTripDeletedEvent(modelMapper.map(trip, TripResponseDTO.class));
+
     }
 
     @Override

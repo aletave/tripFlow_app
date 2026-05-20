@@ -23,4 +23,22 @@ public class TripEventProducer {
         System.out.println("[RABBITMQ] evento inviato: " + event.getEventType() + " a " + t.getDestination());
 
     }
+
+    public void sendTripUpdatedEvent(TripResponseDTO t) {
+        EventDTO<TripResponseDTO> event= new EventDTO<>("TRIP_UPDATED", t);
+        String key = "trip.updated";
+        rabbitTemplate.convertAndSend(RabbitmqConfig.EXCHANGE_NAME,  key, event);
+
+        System.out.println("[RABBITMQ] evento inviato: " + event.getEventType() + " a " + t.getDestination());
+
+    }
+
+    public void sendTripDeletedEvent(TripResponseDTO t) {
+        EventDTO<TripResponseDTO> event= new EventDTO<>("TRIP_DELETED", t);
+        String key = "trip.deleted";
+        rabbitTemplate.convertAndSend(RabbitmqConfig.EXCHANGE_NAME,  key, event);
+
+        System.out.println("[RABBITMQ] evento inviato: " + event.getEventType() + " a " + t.getDestination());
+
+    }
 }

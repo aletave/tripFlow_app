@@ -44,14 +44,12 @@ CREATE TABLE itinerary_stops (
                                      UNIQUE (itinerary_id, stop_order),
 
                                  CONSTRAINT chk_stop_type
-                                     CHECK (stop_type IN ('VIAGGIO', 'ATTIVITA', 'CUSTOM')),
+                                     CHECK (stop_type IN ('VIAGGIO', 'ATTIVITA')),
 
                                  CONSTRAINT chk_stop_reference
                                      CHECK (
                                          (stop_type = 'VIAGGIO' AND viaggio_id IS NOT NULL AND attivita_id IS NULL AND custom_title IS NULL)
                                              OR
                                          (stop_type = 'ATTIVITA' AND attivita_id IS NOT NULL AND viaggio_id IS NULL AND custom_title IS NULL)
-                                             OR
-                                         (stop_type = 'CUSTOM' AND viaggio_id IS NULL AND attivita_id IS NULL AND custom_title IS NOT NULL)
                                          )
 );

@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            #Route di booking-service e review-service
+            - id: booking-service
+              uri: lb://booking-service
+              predicates:
+                - Path=/booking-service/**
+              filters:
+                - StripPrefix=1
+
+            - id: review-service
+              uri: lb://review-service
+              predicates:
+                - Path=/review-service/**
+              filters:
+                - StripPrefix=1
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      access: read-only
+
+logging:
+  level:
+    org.springframework.cloud.gateway: INFO

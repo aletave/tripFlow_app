@@ -1,4 +1,4 @@
-package com.tripflow.discoveryservice;
+package com.tripflow.discovery.discoveryservice;
 
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.builder.SpringApplicationBuilder;

@@ -1,4 +1,4 @@
-package com.tripflow.gateway.gatewayservice;
+package main.java.com.tripflow.gateway.gatewayservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

@@ -41,3 +41,20 @@ management:
 logging:
   level:
     org.springframework.cloud.gateway: INFO
+
+
+springdoc:
+  swagger-ui:
+    # URL di base per accedere alla UI dal gateway
+    path: /swagger-ui.html
+    urls:
+      - name: Itinerary Service
+        url: /itinerary/v3/api-docs
+      - name: Booking Service
+        url: /booking/v3/api-docs
+      - name: Catalog Service
+        url: /catalog/v3/api-docs
+      - name: Review Service
+        url: /review/v3/api-docs
+      - name: User Auth Service
+        url: /user-auth/v3/api-docs

@@ -4,25 +4,43 @@ server:
 spring:
   application:
     name: gateway-service
+
   cloud:
     gateway:
       server:
         webflux:
+          discovery:
+            locator:
+              enabled: true
+
           routes:
-            #Route di booking-service e review-service
             - id: booking-service
               uri: lb://booking-service
               predicates:
                 - Path=/booking-service/**
               filters:
-                - StripPrefix=1
+                - RewritePath=/booking-service/(?<segment>.*), /${segment}
 
             - id: review-service
               uri: lb://review-service
               predicates:
                 - Path=/review-service/**
               filters:
-                - StripPrefix=1
+                - RewritePath=/review-service/(?<segment>.*), /${segment}
+
+            - id: itinerary-service
+              uri: lb://itinerary-service
+              predicates:
+                - Path=/itinerary-service/**
+              filters:
+                - RewritePath=/itinerary-service/(?<segment>.*), /${segment}
+
+            - id: catalog-service
+              uri: lb://catalog-service
+              predicates:
+                - Path=/catalog-service/**
+              filters:
+                - RewritePath=/catalog-service/(?<segment>.*), /${segment}
 
 eureka:
   client:
@@ -38,23 +56,17 @@ management:
     gateway:
       access: read-only
 
-logging:
-  level:
-    org.springframework.cloud.gateway: INFO
-
-
 springdoc:
   swagger-ui:
-    # URL di base per accedere alla UI dal gateway
-    path: /swagger-ui.html
     urls:
-      - name: Itinerary Service
-        url: /itinerary/v3/api-docs
       - name: Booking Service
-        url: /booking/v3/api-docs
-      - name: Catalog Service
-        url: /catalog/v3/api-docs
+        url: http://localhost:8081/v3/api-docs
+
       - name: Review Service
-        url: /review/v3/api-docs
-      - name: User Auth Service
-        url: /user-auth/v3/api-docs
+        url: http://localhost:8082/v3/api-docs
+
+      - name: Itinerary Service
+        url: http://localhost:8083/v3/api-docs
+
+      - name: Catalog Service
+        url: http://localhost:8084/v3/api-docs

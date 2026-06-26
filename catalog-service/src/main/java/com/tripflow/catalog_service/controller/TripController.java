@@ -4,6 +4,8 @@ package com.tripflow.catalog_service.controller;
 import com.tripflow.catalog_service.dto.request.TripRequestDTO;
 import com.tripflow.catalog_service.dto.response.TripResponseDTO;
 import com.tripflow.catalog_service.service.TripService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
@@ -16,6 +18,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/trips")
+@Tag(name = "Trips", description = "Endpoint per la gestione dei viaggi")
 public class TripController {
 
     private final TripService tripService;
@@ -25,6 +28,7 @@ public class TripController {
     }
 
     @PostMapping
+    @Operation(summary = "Permette di creare un nuovo viaggio", description = "Salva il viaggio nel database e pubblica un evento tramite rabbitmq")
     public ResponseEntity<TripResponseDTO> createTrip(@Valid @RequestBody TripRequestDTO requestDTO, UUID organizerId) {
         TripResponseDTO createdTrip = tripService.createTrip(requestDTO, organizerId);
 
@@ -32,6 +36,7 @@ public class TripController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Permette di trovare un viaggio tramite l'id", description = "Cerca un viaggio nel database con una query avente l'id specificaato")
     public ResponseEntity<TripResponseDTO> getTripById(@PathVariable UUID id, TripService tripService) {
 
         TripResponseDTO trip = tripService.getTripById(id);
@@ -40,6 +45,7 @@ public class TripController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Permette di aggiornare i dettagli di un viaggio", description = "Aggiorna un viaggio nel db con una query che aggiorna i dettagli forniti")
     public ResponseEntity<TripResponseDTO> updateTrip(@PathVariable UUID id, @Valid @RequestBody TripRequestDTO requestDTO,
                                                       UUID organizerId) {
         TripResponseDTO updatedTrip = tripService.updateTrip(id, requestDTO, organizerId);
@@ -48,6 +54,7 @@ public class TripController {
     }
 
     @DeleteMapping("/{id}")
+    @Operation(summary = "Permette di eliminare un viaggio", description = "Elimina un dato viaggio nel db")
     public ResponseEntity<Void> deleteTrip(@PathVariable UUID id, UUID organizerId) {
         tripService.deleteTrip(id, organizerId);
 
@@ -55,6 +62,7 @@ public class TripController {
     }
 
     @GetMapping("/organizer/{organizerId}")
+    @Operation(summary = "Permette di trovare un viaggio tramite l'id dell'organizzatore", description = "Cerca un viaggio nel database con una query avente l'id dell'organizzatore")
     public ResponseEntity<List<TripResponseDTO>> getTripsByOrganizerId(@PathVariable UUID organizerId) {
         List<TripResponseDTO> trips = tripService.getTripsByOrganizer(organizerId);
 

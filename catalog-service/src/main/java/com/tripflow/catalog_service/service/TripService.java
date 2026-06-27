@@ -21,4 +21,9 @@ public interface TripService {
 
     List<TripResponseDTO> searchTrips(String destination, LocalDate startDate, LocalDate endDate,
                                       BigDecimal minPrice, BigDecimal maxPrice, Integer minAvailableSpots);
+
+    void decreaseAvailableSpots(UUID tripId, int spots);
+
+    void increaseAvailableSpots(UUID tripId, int spots);
+
 }

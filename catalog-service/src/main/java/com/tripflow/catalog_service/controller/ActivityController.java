@@ -9,6 +9,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,7 +27,13 @@ public class ActivityController {
         this.activityService = activityService;
     }
 
+    private UUID getCurrentUserId() {
+        String id = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return UUID.fromString(id);
+    }
+
     @PostMapping
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di creare una nuova attività", description = "Salva l'attività nel database e pubblica un evento tramite rabbitmq")
     public ResponseEntity<ActivityResponseDTO> createActivity(@Valid @RequestBody ActivityRequestDTO requestDTO) {
 
@@ -43,6 +51,7 @@ public class ActivityController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di aggiornare i dettagli di un'attività", description = "Aggiorna un'attività nel db con una query che aggiorna i dettagli forniti")
     public ResponseEntity<ActivityResponseDTO> updateActivity(@PathVariable UUID id, @Valid @RequestBody ActivityRequestDTO requestDTO) {
 
@@ -52,6 +61,7 @@ public class ActivityController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di eliminare un'attività", description = "Elimina una data attività nel db")
     public ResponseEntity<Void> deleteActivity(@PathVariable UUID id) {
         activityService.deleteActivity(id);

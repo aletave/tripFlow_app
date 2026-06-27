@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -27,9 +29,17 @@ public class TripController {
         this.tripService = tripService;
     }
 
+    private UUID getCurrentUserId() {
+        String id = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return UUID.fromString(id);
+    }
+
     @PostMapping
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di creare un nuovo viaggio", description = "Salva il viaggio nel database e pubblica un evento tramite rabbitmq")
-    public ResponseEntity<TripResponseDTO> createTrip(@Valid @RequestBody TripRequestDTO requestDTO, UUID organizerId) {
+    public ResponseEntity<TripResponseDTO> createTrip(@Valid @RequestBody TripRequestDTO requestDTO) {
+
+        UUID organizerId = getCurrentUserId();
         TripResponseDTO createdTrip = tripService.createTrip(requestDTO, organizerId);
 
         return new ResponseEntity<>(createdTrip, HttpStatus.CREATED);
@@ -37,7 +47,7 @@ public class TripController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Permette di trovare un viaggio tramite l'id", description = "Cerca un viaggio nel database con una query avente l'id specificaato")
-    public ResponseEntity<TripResponseDTO> getTripById(@PathVariable UUID id, TripService tripService) {
+    public ResponseEntity<TripResponseDTO> getTripById(@PathVariable UUID id) {
 
         TripResponseDTO trip = tripService.getTripById(id);
 
@@ -45,17 +55,23 @@ public class TripController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di aggiornare i dettagli di un viaggio", description = "Aggiorna un viaggio nel db con una query che aggiorna i dettagli forniti")
-    public ResponseEntity<TripResponseDTO> updateTrip(@PathVariable UUID id, @Valid @RequestBody TripRequestDTO requestDTO,
-                                                      UUID organizerId) {
+    public ResponseEntity<TripResponseDTO> updateTrip(@PathVariable UUID id, @Valid @RequestBody TripRequestDTO requestDTO) {
+
+        UUID organizerId = getCurrentUserId();
         TripResponseDTO updatedTrip = tripService.updateTrip(id, requestDTO, organizerId);
+
 
         return ResponseEntity.ok(updatedTrip);
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di eliminare un viaggio", description = "Elimina un dato viaggio nel db")
-    public ResponseEntity<Void> deleteTrip(@PathVariable UUID id, UUID organizerId) {
+    public ResponseEntity<Void> deleteTrip(@PathVariable UUID id) {
+
+        UUID organizerId = getCurrentUserId();
         tripService.deleteTrip(id, organizerId);
 
         return ResponseEntity.noContent().build();

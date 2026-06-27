@@ -1,8 +1,9 @@
 package com.tripflow.booking.data.service;
 
+import com.stripe.model.PaymentIntent;
 import com.tripflow.booking.data.dao.PagamentoRepository;
 import com.tripflow.booking.data.dao.PrenotazioneRepository;
-import com.tripflow.booking.data.dto.requests.PagamentoRequest;
+import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
 import com.tripflow.booking.data.dto.responses.PagamentoResponse;
 import com.tripflow.booking.data.entities.Pagamento;
 import com.tripflow.booking.data.entities.Prenotazione;
@@ -44,12 +45,12 @@ public class PagamentoServiceImpl implements PagamentoService {
     private final PagamentoRepository pagamentoRepository;
     private final PrenotazioneRepository prenotazioneRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final StripeService stripeService;
 
 
     @Override
-    public PagamentoResponse avviaPagamento(UUID prenotazioneId,
-                                            UUID viaggiatoreId,
-                                            PagamentoRequest request) {
+    public PagamentoIntentResponse avviaPagamento(UUID prenotazioneId,
+                                                  UUID viaggiatoreId) {
 
         // 1. Carico la prenotazione
         Prenotazione prenotazione = prenotazioneRepository.findById(prenotazioneId)
@@ -75,26 +76,31 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Pagamento già esistente per la prenotazione " + prenotazioneId);
         }
 
-        // 5. Importo.
-        //    Il campo importo del request viene ignorato per sicurezza.
-        //    TODO: integrare Stripe vero. Per ora generiamo un PaymentIntent mock.
-        String paymentIntentId = "pi_mock_" + UUID.randomUUID();
+        // 5. Crea il PaymentIntent VERO su Stripe.
+        //    L'importo è SEMPRE il prezzoTotale della prenotazione, mai dal client.
+        PaymentIntent paymentIntent =
+                stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
 
-        // 6. Crea entity
+        // 6. Persisto il pagamento con l'id reale del PaymentIntent.
+        //    metodo resta null: lo popoleremo dal webhook quando il pagamento è COMPLETATO.
         Pagamento pagamento = Pagamento.builder()
                 .prenotazione(prenotazione)
                 .importo(prenotazione.getPrezzoTotale())
-                .metodo(request.getMetodo())
                 .stato(StatoPagamento.IN_ATTESA)
-                .stripePaymentIntentId(paymentIntentId)
+                .stripePaymentIntentId(paymentIntent.getId())
                 .build();
 
         Pagamento saved = pagamentoRepository.save(pagamento);
 
         log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, paymentIntent={}",
-                saved.getId(), prenotazioneId, saved.getImporto(), paymentIntentId);
+                saved.getId(), prenotazioneId, saved.getImporto(), paymentIntent.getId());
 
-        return PagamentoMapper.toResponse(saved);
+        // 7. Restituisco il client_secret all'app Android per la PaymentSheet.
+        return PagamentoIntentResponse.builder()
+                .pagamentoId(saved.getId())
+                .clientSecret(paymentIntent.getClientSecret())
+                .importo(saved.getImporto())
+                .build();
     }
 
     @Override
@@ -135,21 +141,20 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Impossibile confermare: pagamento in stato " + statoAttuale);
         }
 
-        // Aggiornamento + dati carta mock
-        // TODO: in produzione brand e ultime 4 cifre arrivano dal webhook Stripe.
+        StripeService.DettagliCarta carta = stripeService.recuperaDettagliCarta(stripePaymentIntentId);
+
         pagamento.setStato(StatoPagamento.COMPLETATO);
         pagamento.setDataPagamento(LocalDateTime.now());
-        pagamento.setBrandCarta("VISA");
-        pagamento.setUltimeQuattroCifre("1234");
+        pagamento.setBrandCarta(carta.brand());
+        pagamento.setUltimeQuattroCifre(carta.ultime4());
+        pagamento.setMetodo(carta.metodo());
 
         Pagamento saved = pagamentoRepository.save(pagamento);
 
         UUID prenotazioneId = pagamento.getPrenotazione().getId();
         log.info("Pagamento {} confermato per prenotazione {}", saved.getId(), prenotazioneId);
 
-        // Pubblica evento: il listener in PrenotazioneServiceImpl porterà
-        // la prenotazione in CONFERMATA. Sincrono, stessa transazione:
-        // se la conferma fallisce, anche il completamento del pagamento viene rollback.
+
         eventPublisher.publishEvent(new PagamentoCompletatoEvent(prenotazioneId));
 
         return PagamentoMapper.toResponse(saved);

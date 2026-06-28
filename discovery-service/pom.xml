@@ -7,7 +7,8 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.4</version>
+        <!-- Cambiato da 3.5.4 a 3.4.3 (o la versione 3.4.x esatta che usano gli altri servizi) -->
+        <version>3.4.3</version>
         <relativePath/>
     </parent>
 
@@ -19,9 +20,8 @@
 
     <properties>
         <java.version>17</java.version>
-        <!-- Spring Cloud 2025.0.x e' la release train compatibile con Spring Boot 3.5.x.
-             Tenere allineata con la versione usata da booking-service e review-service. -->
-        <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <!-- Spring Cloud 2024.0.x (Release train "Moatlane") e' quella corretta per Spring Boot 3.4.x -->
+        <spring-cloud.version>2024.0.0</spring-cloud.version>
     </properties>
 
     <dependencyManagement>

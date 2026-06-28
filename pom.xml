@@ -28,6 +28,8 @@
         <module>review-service</module>
         <module>booking-service</module>
         <module>itinerary-service</module>
+        <module>discovery-service</module>
+        <module>gateway-service</module>
     </modules>
 
 </project>

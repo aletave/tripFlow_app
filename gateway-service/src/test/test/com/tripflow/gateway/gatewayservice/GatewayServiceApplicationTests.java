@@ -3,11 +3,10 @@ package com.tripflow.gateway.gatewayservice;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
+@SpringBootTest(classes = GatewayServiceApplication.class)
 class GatewayServiceApplicationTests {
 
     @Test
     void contextLoads() {
     }
-
 }

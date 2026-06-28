@@ -4,9 +4,13 @@ package com.tripflow.catalog_service.controller;
 import com.tripflow.catalog_service.dto.request.ActivityRequestDTO;
 import com.tripflow.catalog_service.dto.response.ActivityResponseDTO;
 import com.tripflow.catalog_service.service.ActivityService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.util.List;
@@ -14,6 +18,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/activities")
+@Tag(name = "Activities", description = "Endpoint per la gestione delle attività")
 public class ActivityController {
 
     private final ActivityService activityService;
@@ -22,7 +27,14 @@ public class ActivityController {
         this.activityService = activityService;
     }
 
+    private UUID getCurrentUserId() {
+        String id = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        return UUID.fromString(id);
+    }
+
     @PostMapping
+    @PreAuthorize("hasRole('ORGANIZER')")
+    @Operation(summary = "Permette di creare una nuova attività", description = "Salva l'attività nel database e pubblica un evento tramite rabbitmq")
     public ResponseEntity<ActivityResponseDTO> createActivity(@Valid @RequestBody ActivityRequestDTO requestDTO) {
 
         ActivityResponseDTO createdActivity = activityService.createActivity(requestDTO);
@@ -31,6 +43,7 @@ public class ActivityController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Permette di trovare un'attività tramite l'id", description = "Cerca un'attiività nel database con una query avente l'id specificaato")
     public ResponseEntity<ActivityResponseDTO> getActivityById(@PathVariable UUID id) {
         ActivityResponseDTO activity = activityService.getActivityById(id);
 
@@ -38,6 +51,8 @@ public class ActivityController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    @Operation(summary = "Permette di aggiornare i dettagli di un'attività", description = "Aggiorna un'attività nel db con una query che aggiorna i dettagli forniti")
     public ResponseEntity<ActivityResponseDTO> updateActivity(@PathVariable UUID id, @Valid @RequestBody ActivityRequestDTO requestDTO) {
 
         ActivityResponseDTO updatedAct = activityService.updateActivity(id, requestDTO);
@@ -46,6 +61,8 @@ public class ActivityController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ORGANIZER')")
+    @Operation(summary = "Permette di eliminare un'attività", description = "Elimina una data attività nel db")
     public ResponseEntity<Void> deleteActivity(@PathVariable UUID id) {
         activityService.deleteActivity(id);
 
@@ -53,6 +70,7 @@ public class ActivityController {
     }
 
     @GetMapping("/trip/{tripId}")
+    @Operation(summary = "Permette di trovare un attività tramite l'id del viaggio", description = "Cerca nel database un'attività tramite una query con l'id del viaggio associato")
     public ResponseEntity<List<ActivityResponseDTO>> getActivitiesByTripId(@PathVariable UUID tripId) {
 
         List<ActivityResponseDTO> act = activityService.getActivitiesByTripId(tripId);

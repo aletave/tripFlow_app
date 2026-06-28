@@ -1,5 +1,6 @@
 package com.tripflow.booking.controller;
 
+import com.tripflow.booking.configSecurity.SecurityUtils;
 import com.tripflow.booking.data.dto.requests.PrenotazioneAttivitaRequest;
 import com.tripflow.booking.data.dto.requests.PrenotazioneRequest;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
@@ -16,7 +17,6 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -35,43 +35,32 @@ public class PrenotazioneController {
 
     private final PrenotazioneService prenotazioneService;
 
-    //Header con l'id del viaggiatore. TODO: sostituire con JWT (Spring Security).
-    private static final String HEADER_VIAGGIATORE = "X-Viaggiatore-Id";
-
     //viaggiatore
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public PrenotazioneResponse crea(
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId,
-            @Valid @RequestBody PrenotazioneRequest request) {
-        return prenotazioneService.creaPrenotazione(viaggiatoreId, request);
+    public PrenotazioneResponse crea(@Valid @RequestBody PrenotazioneRequest request) {
+        return prenotazioneService.creaPrenotazione(SecurityUtils.viaggiatoreId(), request);
     }
 
     @GetMapping("/{id}")
-    public PrenotazioneResponse trova(
-            @PathVariable UUID id,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return prenotazioneService.trovaPrenotazione(id, viaggiatoreId);
+    public PrenotazioneResponse trova(@PathVariable UUID id) {
+        return prenotazioneService.trovaPrenotazione(id, SecurityUtils.viaggiatoreId());
     }
 
     @GetMapping("/mie")
-    public List<PrenotazioneResponse> mie(
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return prenotazioneService.trovaMiePrenotazioni(viaggiatoreId);
+    public List<PrenotazioneResponse> mie() {
+        return prenotazioneService.trovaMiePrenotazioni(SecurityUtils.viaggiatoreId());
     }
 
     @GetMapping("/mie/attive")
-    public List<PrenotazioneResponse> mieAttive(
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return prenotazioneService.trovaMiePrenotazioniAttive(viaggiatoreId);
+    public List<PrenotazioneResponse> mieAttive() {
+        return prenotazioneService.trovaMiePrenotazioniAttive(SecurityUtils.viaggiatoreId());
     }
 
     //Transizione di stato: la prenotazione non viene cancellata.
     @PatchMapping("/{id}/annulla")
-    public PrenotazioneResponse annulla(
-            @PathVariable UUID id,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return prenotazioneService.annullaPrenotazione(id, viaggiatoreId);
+    public PrenotazioneResponse annulla(@PathVariable UUID id) {
+        return prenotazioneService.annullaPrenotazione(id, SecurityUtils.viaggiatoreId());
     }
 
 
@@ -81,27 +70,23 @@ public class PrenotazioneController {
     @ResponseStatus(HttpStatus.CREATED)
     public PrenotazioneResponse aggiungiAttivita(
             @PathVariable UUID id,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId,
             @Valid @RequestBody PrenotazioneAttivitaRequest request) {
-        return prenotazioneService.aggiungiAttivita(id, viaggiatoreId, request);
+        return prenotazioneService.aggiungiAttivita(id, SecurityUtils.viaggiatoreId(), request);
     }
 
     @DeleteMapping("/{id}/attivita/{attivitaId}")
     public PrenotazioneResponse rimuoviAttivita(
             @PathVariable UUID id,
-            @PathVariable UUID attivitaId,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return prenotazioneService.rimuoviAttivita(id, viaggiatoreId, attivitaId);
+            @PathVariable UUID attivitaId) {
+        return prenotazioneService.rimuoviAttivita(id, SecurityUtils.viaggiatoreId(), attivitaId);
     }
 
 
     // Organizzatore
     //Tutte le prenotazioni ricevute per un viaggio.
 
-
-     //TODO: proteggere con Spring Security — solo l'organizzatore proprietario
-     //del viaggio deve poter chiamare questo endpoint.
-
+    //TODO: proteggere con @PreAuthorize quando ci saranno i ruoli — solo l'organizzatore
+    //proprietario del viaggio deve poter chiamare questo endpoint.
     @GetMapping("/viaggio/{viaggioId}")
     public List<PrenotazioneResponse> perViaggio(@PathVariable UUID viaggioId) {
         return prenotazioneService.trovaPrenotazioniPerViaggio(viaggioId);
@@ -109,8 +94,8 @@ public class PrenotazioneController {
 
     //ricerca dinamica
 
-    //TODO: limitare in base ai ruoli quando arriva Spring Security
-    //(un viaggiatore non deve poter cercare le prenotazioni di altri).
+    //TODO: limitare in base ai ruoli (un viaggiatore non deve poter cercare
+    //le prenotazioni di altri).
     @GetMapping("/cerca")
     public List<PrenotazioneResponse> cerca(
             @RequestParam(required = false) UUID viaggiatoreId,

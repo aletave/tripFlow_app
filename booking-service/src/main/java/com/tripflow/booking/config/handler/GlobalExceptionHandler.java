@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 
@@ -53,6 +55,23 @@ public class GlobalExceptionHandler {
                 .map(viol -> viol.getField().concat(" : ")
                         .concat(viol.getDefaultMessage()))
                 .collect(Collectors.joining(" , "));
+        return errorResponse(req, message);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onTypeMismatch(WebRequest req, MethodArgumentTypeMismatchException ex) {
+        String tipoAtteso = ex.getRequiredType() != null
+                ? ex.getRequiredType().getSimpleName()
+                : "valore valido";
+        String message = "Parametro '" + ex.getName() + "' non valido: atteso un " + tipoAtteso;
+        return errorResponse(req, message);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onMissingHeader(WebRequest req, MissingRequestHeaderException ex) {
+        String message = "Header obbligatorio mancante: " + ex.getHeaderName();
         return errorResponse(req, message);
     }
 

@@ -247,7 +247,7 @@ public class RecensioneServiceImpl implements RecensioneService {
 
     private PrenotazioneResponseDTO recuperaPrenotazione(UUID prenotazioneId, UUID viaggiatoreId) {
         try {
-            return bookingClient.getPrenotazione(prenotazioneId, viaggiatoreId);
+            return bookingClient.getPrenotazione(prenotazioneId);
 
         } catch (FeignException.NotFound e) {
             throw new ReviewException(

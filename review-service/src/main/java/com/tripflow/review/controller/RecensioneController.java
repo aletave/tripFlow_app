@@ -1,5 +1,6 @@
 package com.tripflow.review.controller;
 
+import com.tripflow.review.configSecurity.SecurityUtils;
 import com.tripflow.review.data.dto.requests.RecensioneRequest;
 import com.tripflow.review.data.dto.requests.RecensioneUpdateRequest;
 import com.tripflow.review.data.dto.responses.RecensioneResponse;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.UUID;
 
 // REST controller per Recensione.
+// L'identità (id + nome) arriva dal JWT validato (SecurityUtils),
+// non più dagli header X-Viaggiatore-Id / X-Viaggiatore-Nome.
 
 @RestController
 @RequestMapping("/api/recensioni")
@@ -38,51 +40,42 @@ public class RecensioneController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public RecensioneResponse creaRecensione(
-            @RequestHeader("X-Viaggiatore-Id") UUID viaggiatoreId,
-            @RequestHeader("X-Viaggiatore-Nome") String autoreNome,
-            @Valid @RequestBody RecensioneRequest request) {
-
-        return recensioneService.creaRecensione(viaggiatoreId, autoreNome, request);
+    public RecensioneResponse creaRecensione(@Valid @RequestBody RecensioneRequest request) {
+        return recensioneService.creaRecensione(
+                SecurityUtils.viaggiatoreId(), SecurityUtils.nome(), request);
     }
 
 
     @GetMapping("/mie")
-    public List<RecensioneResponse> trovaMieRecensioni(
-            @RequestHeader("X-Viaggiatore-Id") UUID viaggiatoreId) {
-
-        return recensioneService.trovaMieRecensioni(viaggiatoreId);
+    public List<RecensioneResponse> trovaMieRecensioni() {
+        return recensioneService.trovaMieRecensioni(SecurityUtils.viaggiatoreId());
     }
 
 
     @PutMapping("/{id}")
     public RecensioneResponse modificaRecensione(
             @PathVariable("id") UUID recensioneId,
-            @RequestHeader("X-Viaggiatore-Id") UUID viaggiatoreId,
             @Valid @RequestBody RecensioneUpdateRequest request) {
 
-        return recensioneService.modificaRecensione(recensioneId, viaggiatoreId, request);
+        return recensioneService.modificaRecensione(recensioneId, SecurityUtils.viaggiatoreId(), request);
     }
 
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void eliminaRecensione(
-            @PathVariable("id") UUID recensioneId,
-            @RequestHeader("X-Viaggiatore-Id") UUID viaggiatoreId) {
-
-        recensioneService.eliminaRecensione(recensioneId, viaggiatoreId);
+    public void eliminaRecensione(@PathVariable("id") UUID recensioneId) {
+        recensioneService.eliminaRecensione(recensioneId, SecurityUtils.viaggiatoreId());
     }
 
 
     @GetMapping("/puo-recensire")
     public boolean puoRecensire(
-            @RequestHeader("X-Viaggiatore-Id") UUID viaggiatoreId,
             @RequestParam("prenotazioneId") UUID prenotazioneId,
             @RequestParam("tipoOggetto") TipoOggetto tipoOggetto,
             @RequestParam("oggettoId") UUID oggettoId) {
 
-        return recensioneService.puoRecensire(viaggiatoreId, prenotazioneId, tipoOggetto, oggettoId);
+        return recensioneService.puoRecensire(
+                SecurityUtils.viaggiatoreId(), prenotazioneId, tipoOggetto, oggettoId);
     }
 
 

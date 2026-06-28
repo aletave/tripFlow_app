@@ -197,7 +197,7 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Impossibile rimborsare: pagamento in stato " + pagamento.getStato());
         }
 
-        // TODO: chiamare Stripe per il rimborso vero
+        //Rimborso  solo a livello applicativo: non si chiama Stripe per questo.
         pagamento.setStato(StatoPagamento.RIMBORSATO);
         Pagamento saved = pagamentoRepository.save(pagamento);
 

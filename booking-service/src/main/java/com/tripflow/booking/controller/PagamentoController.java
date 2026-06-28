@@ -1,6 +1,7 @@
 package com.tripflow.booking.controller;
 
 import com.stripe.model.Event;
+import com.tripflow.booking.configSecurity.SecurityUtils;
 import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
 import com.tripflow.booking.data.dto.responses.PagamentoResponse;
 import com.tripflow.booking.data.service.PagamentoService;
@@ -29,23 +30,17 @@ public class PagamentoController {
     private final PagamentoService pagamentoService;
     private final StripeService stripeService;
 
-    private static final String HEADER_VIAGGIATORE = "X-Viaggiatore-Id";
-
-    //Operazioni viaggiatore
+    //Operazioni viaggiatore (id dal JWT validato)
 
     @PostMapping("/{prenotazioneId}")
     @ResponseStatus(HttpStatus.CREATED)
-    public PagamentoIntentResponse avvia(
-            @PathVariable UUID prenotazioneId,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return pagamentoService.avviaPagamento(prenotazioneId, viaggiatoreId);
+    public PagamentoIntentResponse avvia(@PathVariable UUID prenotazioneId) {
+        return pagamentoService.avviaPagamento(prenotazioneId, SecurityUtils.viaggiatoreId());
     }
 
     @GetMapping("/{prenotazioneId}")
-    public PagamentoResponse trova(
-            @PathVariable UUID prenotazioneId,
-            @RequestHeader(HEADER_VIAGGIATORE) UUID viaggiatoreId) {
-        return pagamentoService.trovaPagamento(prenotazioneId, viaggiatoreId);
+    public PagamentoResponse trova(@PathVariable UUID prenotazioneId) {
+        return pagamentoService.trovaPagamento(prenotazioneId, SecurityUtils.viaggiatoreId());
     }
 
     @PostMapping("/webhook")

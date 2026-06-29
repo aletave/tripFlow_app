@@ -89,13 +89,4 @@ public class GlobalExceptionHandler {
         log.error("Exception handler :::: {}", output);
         return output;
     }
-
-    @ExceptionHandler({
-            MethodArgumentTypeMismatchException.class,
-            MissingRequestHeaderException.class
-    })
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onRequestParamError(WebRequest req, Exception ex) {
-        return errorResponse(req, ex.getMessage());
-    }
 }

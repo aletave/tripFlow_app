@@ -2,8 +2,8 @@ package com.tripflow.itinerary_service.repository;
 
 import com.tripflow.itinerary_service.model.ItineraryStop;
 import org.springframework.data.jpa.repository.JpaRepository;
-
 import java.util.List;
+import java.util.UUID;
 
 public interface ItineraryStopRepository extends JpaRepository<ItineraryStop, Long> {
 
@@ -12,4 +12,6 @@ public interface ItineraryStopRepository extends JpaRepository<ItineraryStop, Lo
 
     // elimina tutte le tappe di un itinerario
     void deleteByItineraryId(Long itineraryId);
+
+    void deleteByViaggioId(UUID viaggioId);
 }

@@ -3,6 +3,7 @@ package com.tripflow.itinerary_service.model;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import java.util.UUID;
 
 import java.time.LocalDateTime;
 
@@ -24,9 +25,10 @@ public class ItineraryStop {
     private String stopType;
 
     @Column(name = "viaggio_id")
-    private Long viaggioId;
+    private UUID viaggioId;
+
     @Column(name = "attivita_id")
-    private Long attivitaId;
+    private UUID attivitaId;
 
     @Column(name = "custom_title", length = 150)
     private String customTitle;

@@ -1,6 +1,7 @@
 package com.tripflow.itinerary_service.dto.response;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 //restituirà un oggetto con all'interno i seguenti dati
 public record ItineraryStopResponse(
@@ -11,9 +12,9 @@ public record ItineraryStopResponse(
 
         String stopType,
 
-        Long viaggioId,
+        UUID viaggioId,
 
-        Long attivitaId,
+        UUID attivitaId,
 
         String customTitle,
 

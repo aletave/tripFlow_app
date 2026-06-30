@@ -29,15 +29,16 @@ public class BookingEventConsumer {
             key = "trip.deleted"
     ))
     @Transactional
-    public void handleTripDeletedEvent(EventDTO<UUID> event) {
-        log.info("[RABBITMQ CONSUMER] Ricevuto evento: {}", event.getEventType());
+    public void handleTripDeletedEvent(EventDTO<java.util.Map<String, Object>> event) {
+        log.info("[RABBITMQ CONSUMER] Ricevuto evento dal catalogo: {}", event.getEventType());
 
         if ("TRIP_DELETED".equals(event.getEventType())) {
-            UUID tripId = event.getPayload();
-            log.warn("Il Viaggio {} è stato eliminato. Annullamento prenotazioni...", tripId);
+            String idString = (String) event.getPayload().get("id");
+            UUID tripId = UUID.fromString(idString);
+
+            log.warn("[SAGA] Il Viaggio {} è stato eliminato dal catalogo. Annullamento prenotazioni in corso...", tripId);
 
             List<Prenotazione> prenotazioni = prenotazioneRepository.findByViaggioId(tripId);
-
             int annullate = 0;
             for (Prenotazione p : prenotazioni) {
                 if (p.getStato() != StatoPrenotazione.ANNULLATA) {
@@ -46,7 +47,7 @@ public class BookingEventConsumer {
                     annullate++;
                 }
             }
-            log.info("Annullate {} prenotazioni per il viaggio {}", annullate, tripId);
+            log.info("[SAGA] Completato. Annullate {} prenotazioni per il viaggio {}", annullate, tripId);
         }
     }
 }

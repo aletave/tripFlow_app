@@ -78,8 +78,10 @@ public class PagamentoServiceImpl implements PagamentoService {
 
         // 5. Crea il PaymentIntent VERO su Stripe.
         //    L'importo è SEMPRE il prezzoTotale della prenotazione, mai dal client.
-        PaymentIntent paymentIntent =
-                stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
+        //PaymentIntent paymentIntent =
+                //stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
+
+        String fakeIntentId = "pi_fake_" + UUID.randomUUID().toString().substring(0,8);
 
         // 6. Persisto il pagamento con l'id reale del PaymentIntent.
         //    metodo resta null: lo popoleremo dal webhook quando il pagamento è COMPLETATO.
@@ -87,18 +89,22 @@ public class PagamentoServiceImpl implements PagamentoService {
                 .prenotazione(prenotazione)
                 .importo(prenotazione.getPrezzoTotale())
                 .stato(StatoPagamento.IN_ATTESA)
-                .stripePaymentIntentId(paymentIntent.getId())
+                .stripePaymentIntentId(fakeIntentId)
                 .build();
 
         Pagamento saved = pagamentoRepository.save(pagamento);
 
-        log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, paymentIntent={}",
-                saved.getId(), prenotazioneId, saved.getImporto(), paymentIntent.getId());
+        //log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, paymentIntent={}",
+                //saved.getId(), prenotazioneId, saved.getImporto(), paymentIntent.getId());
+
+        log.info("Pagamento finto avviato: id={}, prenotazione={}", saved.getId(), prenotazioneId);
+
+        eventPublisher.publishEvent(new PagamentoCompletatoEvent(prenotazioneId));
 
         // 7. Restituisco il client_secret all'app Android per la PaymentSheet.
         return PagamentoIntentResponse.builder()
                 .pagamentoId(saved.getId())
-                .clientSecret(paymentIntent.getClientSecret())
+                .clientSecret("fake")
                 .importo(saved.getImporto())
                 .build();
     }

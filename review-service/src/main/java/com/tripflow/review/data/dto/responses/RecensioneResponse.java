@@ -24,7 +24,7 @@ public class RecensioneResponse {
     private UUID oggettoId;
 
 
-    //Dati SNAPSHOT
+    //Dati snapshot
     private String oggettoNome;
 
     private String autoreNome;
@@ -36,7 +36,7 @@ public class RecensioneResponse {
     private String commento;
 
 
-    // AUDIT
+    //Audit
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

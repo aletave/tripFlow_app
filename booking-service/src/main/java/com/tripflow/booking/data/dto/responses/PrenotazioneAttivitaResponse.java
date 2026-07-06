@@ -15,7 +15,7 @@ public class PrenotazioneAttivitaResponse {
     private UUID id;
     private UUID attivitaId;
 
-    // Dati snapshot (esposti senza suffisso snap)
+    // snapshot
     private String nome;
     private BigDecimal prezzo;
     private Integer durataMinuti;

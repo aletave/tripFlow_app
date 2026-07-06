@@ -116,13 +116,8 @@ public class Prenotazione {
         attivita.setPrenotazione(null);
     }
 
-    /**
-     * Ricalcola il prezzo totale in base allo stato corrente:
-     * (prezzoViaggio + somma prezzi attività) * numeroPartecipanti
-     *
-     * Da chiamare ogni volta che cambia il numero di partecipanti
-     * o la lista delle attività.
-     */
+    //Ricalcola il prezzo totale in base allo stato corrente:
+    //(prezzoViaggio + somma prezzi attività) * numeroPartecipanti
     public void ricalcolaPrezzoTotale() {
         BigDecimal prezzoUnitario = viaggioPrezzoSnap;
         for (PrenotazioneAttivita a : attivitaSelezionate) {

@@ -21,6 +21,9 @@ public class TokenGeneratorTest {
         String token = Jwts.builder()
                 .subject(UUID.randomUUID().toString())
                 .claim("role", "ORGANIZER")
+                //claim "nome" richiesto da review-service (autore_nome_snap NOT NULL);
+                //user-auth dovra emetterlo nei token reali
+                .claim("nome", "Utente Test")
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + 864000000L))
                 .signWith(Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8)))

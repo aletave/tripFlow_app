@@ -32,9 +32,6 @@ import java.util.UUID;
 
 // Implementazione di PagamentoService
 
-//per ora ho solo preparato stripe, ma per ora solo mock,
-//implementerò stripe come si deve successivamente
-
 
 @Service
 @RequiredArgsConstructor
@@ -69,9 +66,12 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Impossibile avviare pagamento: prenotazione in stato " + prenotazione.getStato());
         }
 
-        // 4. Check pagamento già esistente
+        // 4. Check pagamento già esistente.
+        //    Se è FALLITO il viaggiatore può ritentare (si riusa la stessa riga,
+        //    UNIQUE su prenotazione_id); in ogni altro stato è un duplicato.
         Optional<Pagamento> trova_esistente = pagamentoRepository.findByPrenotazioneId(prenotazioneId);
-        if (trova_esistente.isPresent()) {
+        if (trova_esistente.isPresent()
+                && trova_esistente.get().getStato() != StatoPagamento.FALLITO) {
             throw new PagamentoEsistenteException(
                     "Pagamento già esistente per la prenotazione " + prenotazioneId);
         }
@@ -81,14 +81,24 @@ public class PagamentoServiceImpl implements PagamentoService {
         PaymentIntent paymentIntent =
                 stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
 
-        // 6. Persisto il pagamento con l'id reale del PaymentIntent.
-        //    metodo resta null: lo popoleremo dal webhook quando il pagamento è COMPLETATO.
-        Pagamento pagamento = Pagamento.builder()
-                .prenotazione(prenotazione)
-                .importo(prenotazione.getPrezzoTotale())
-                .stato(StatoPagamento.IN_ATTESA)
-                .stripePaymentIntentId(paymentIntent.getId())
-                .build();
+        // 6. Ppagamento con l'id reale del PaymentIntent.
+        Pagamento pagamento;
+        if (trova_esistente.isPresent()) {
+            // Retry dopo FALLITO: nuovo PaymentIntent sulla stessa riga.
+            pagamento = trova_esistente.get();
+            pagamento.setStato(StatoPagamento.IN_ATTESA);
+            pagamento.setImporto(prenotazione.getPrezzoTotale());
+            pagamento.setStripePaymentIntentId(paymentIntent.getId());
+            log.info("Ritento pagamento fallito {} per prenotazione {}",
+                    pagamento.getId(), prenotazioneId);
+        } else {
+            pagamento = Pagamento.builder()
+                    .prenotazione(prenotazione)
+                    .importo(prenotazione.getPrezzoTotale())
+                    .stato(StatoPagamento.IN_ATTESA)
+                    .stripePaymentIntentId(paymentIntent.getId())
+                    .build();
+        }
 
         Pagamento saved = pagamentoRepository.save(pagamento);
 
@@ -178,8 +188,6 @@ public class PagamentoServiceImpl implements PagamentoService {
         log.warn("Pagamento {} fallito per prenotazione {}",
                 saved.getId(), pagamento.getPrenotazione().getId());
 
-        // La prenotazione resta IN_ATTESA: il viaggiatore può ritentare il pagamento.
-
         return PagamentoMapper.toResponse(saved);
     }
 
@@ -191,13 +199,12 @@ public class PagamentoServiceImpl implements PagamentoService {
                         "Nessun pagamento trovato per la prenotazione " + prenotazioneId));
 
         // Solo i pagamenti completati possono essere rimborsati.
-        // (Se il pagamento è IN_ATTESA o FALLITO, non c'è nulla da rimborsare.)
         if (pagamento.getStato() != StatoPagamento.COMPLETATO) {
             throw new StatoPagamentoException(
                     "Impossibile rimborsare: pagamento in stato " + pagamento.getStato());
         }
 
-        //Rimborso  solo a livello applicativo: non si chiama Stripe per questo.
+        //Rimborso  solo a livello applicativo: non chiamo Stripe per questo.
         pagamento.setStato(StatoPagamento.RIMBORSATO);
         Pagamento saved = pagamentoRepository.save(pagamento);
 

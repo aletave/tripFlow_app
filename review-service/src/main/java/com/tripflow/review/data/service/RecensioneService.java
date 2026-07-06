@@ -11,7 +11,6 @@ import java.util.UUID;
 
 public interface RecensioneService {
 
-    // viaggiatore
 
     RecensioneResponse creaRecensione(UUID viaggiatoreId,
                                       String autoreNome,
@@ -33,7 +32,7 @@ public interface RecensioneService {
     void eliminaRecensione(UUID recensioneId, UUID viaggiatoreId);
 
 
-    //pubblici (no ownership)
+    //pubblici
 
     List<RecensioneResponse> trovaRecensioniOggetto(UUID oggettoId);
 

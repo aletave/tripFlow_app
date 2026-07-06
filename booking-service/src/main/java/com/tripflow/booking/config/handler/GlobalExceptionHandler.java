@@ -13,8 +13,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.bind.MissingRequestHeaderException;
-import org.springframework.web.bind.MissingRequestHeaderException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 
@@ -88,14 +86,5 @@ public class GlobalExceptionHandler {
         ServiceError output = new ServiceError(new Date(), httpreq.getRequestURI(), message);
         log.error("Exception handler :::: {}", output);
         return output;
-    }
-
-    @ExceptionHandler({
-            MethodArgumentTypeMismatchException.class,
-            MissingRequestHeaderException.class
-    })
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onRequestParamError(WebRequest req, Exception ex) {
-        return errorResponse(req, ex.getMessage());
     }
 }

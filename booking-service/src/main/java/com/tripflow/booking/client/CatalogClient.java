@@ -8,11 +8,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
 
-//client catalog-service.
-@FeignClient(
-        name = "catalog-service",
-        url = "${tripflow.catalog.base-url}"
-)
+//client catalog-service
+@FeignClient(name = "catalog-service")
 public interface CatalogClient {
 
     @GetMapping("/api/v1/trips/{id}")

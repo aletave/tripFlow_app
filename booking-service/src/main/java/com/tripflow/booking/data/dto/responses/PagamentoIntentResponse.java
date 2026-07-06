@@ -11,7 +11,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class PagamentoIntentResponse {
 
-    private UUID pagamentoId;      // il nostro id, per correlare lato app
-    private String clientSecret;   // serve all'app Android per aprire la PaymentSheet
-    private BigDecimal importo;    // per mostrarlo a schermo
+    private UUID pagamentoId;
+    private String clientSecret;
+    private BigDecimal importo;
 }

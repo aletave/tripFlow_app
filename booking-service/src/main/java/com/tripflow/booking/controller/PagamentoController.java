@@ -6,6 +6,8 @@ import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
 import com.tripflow.booking.data.dto.responses.PagamentoResponse;
 import com.tripflow.booking.data.service.PagamentoService;
 import com.tripflow.booking.data.service.StripeService;
+import com.tripflow.booking.exception.BookingException;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -50,18 +52,23 @@ public class PagamentoController {
 
         Event event = stripeService.costruisciEvento(payload, signature);
 
-        switch (event.getType()) {
-            case "payment_intent.succeeded" -> {
-                String paymentIntentId = stripeService.estraiPaymentIntentId(event);
-                pagamentoService.confermaPagamento(paymentIntentId);
-                log.info("Webhook: pagamento confermato per PaymentIntent {}", paymentIntentId);
+        try {
+            switch (event.getType()) {
+                case "payment_intent.succeeded" -> {
+                    String paymentIntentId = stripeService.estraiPaymentIntentId(event);
+                    pagamentoService.confermaPagamento(paymentIntentId);
+                    log.info("Webhook: pagamento confermato per PaymentIntent {}", paymentIntentId);
+                }
+                case "payment_intent.payment_failed" -> {
+                    String paymentIntentId = stripeService.estraiPaymentIntentId(event);
+                    pagamentoService.gestisciPagamentoFallito(paymentIntentId);
+                    log.warn("Webhook: pagamento fallito per PaymentIntent {}", paymentIntentId);
+                }
+                default -> log.debug("Webhook: evento Stripe ignorato ({})", event.getType());
             }
-            case "payment_intent.payment_failed" -> {
-                String paymentIntentId = stripeService.estraiPaymentIntentId(event);
-                pagamentoService.gestisciPagamentoFallito(paymentIntentId);
-                log.warn("Webhook: pagamento fallito per PaymentIntent {}", paymentIntentId);
-            }
-            default -> log.debug("Webhook: evento Stripe ignorato ({})", event.getType());
+        } catch (EntityNotFoundException | BookingException e) {
+            log.warn("Webhook: evento {} non applicabile, ignorato: {}",
+                    event.getType(), e.getMessage());
         }
 
         return ResponseEntity.ok("");

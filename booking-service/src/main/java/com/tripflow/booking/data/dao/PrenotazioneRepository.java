@@ -2,6 +2,8 @@ package com.tripflow.booking.data.dao;
 
 import com.tripflow.booking.data.entities.Prenotazione;
 import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -17,22 +19,29 @@ import java.util.UUID;
 public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID>,
         JpaSpecificationExecutor<Prenotazione> {
 
-    // query methods
 
     // "Le mie prenotazioni" — ordinate dalla più recente
+    @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggiatoreIdOrderByDataPrenotazioneDesc(UUID viaggiatoreId);
 
     // "Le mie prenotazioni attive" — filtrate per stati (es. IN_ATTESA + CONFERMATA)
+    @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggiatoreIdAndStatoIn(UUID viaggiatoreId,
                                                      Collection<StatoPrenotazione> stati);
 
     // "Prenotazioni ricevute per il mio viaggio" — vista organizzatore
+    @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggioId(UUID viaggioId);
 
-    // Tutte le prenotazioni in un certo stato (es. job batch)
+    // Ricerca dinamica: ridichiarare findAll(Specification) permette di
+    // agganciare l'@EntityGraph anche alle query da Specification
+    @Override
+    @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
+    List<Prenotazione> findAll(Specification<Prenotazione> spec);
+
+    // Tutte le prenotazioni in un certo stato
     List<Prenotazione> findByStato(StatoPrenotazione stato);
 
-    // "Ho già prenotato questo viaggio?" — esclude le prenotazioni annullate
     List<Prenotazione> findByViaggiatoreIdAndViaggioIdAndStatoIn(
             UUID viaggiatoreId, UUID viaggioId, Collection<StatoPrenotazione> stati);
 
@@ -40,9 +49,7 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
 
     // QUERY JPQL CUSTOM
 
-    // Carica prenotazione + attività in una sola query (evita N+1).
-    // LEFT JOIN FETCH: include la prenotazione anche se non ha attività.
-    // DISTINCT: evita righe duplicate dovute al join.
+    //carica prenotazione + attività in una sola query (evita N+1)
     @Query("""
            SELECT DISTINCT p FROM Prenotazione p
            LEFT JOIN FETCH p.attivitaSelezionate
@@ -50,8 +57,7 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
            """)
     Optional<Prenotazione> trovaConAttivita(@Param("id") UUID id);
 
-    // Somma dei partecipanti per un viaggio (esclude le annullate).
-    // COALESCE evita NULL quando non ci sono prenotazioni: ritorna 0.
+    //somma dei partecipanti per un viaggio (esclude le annullate)
     @Query("""
            SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
            WHERE p.viaggioId = :viaggioId
@@ -59,12 +65,19 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
            """)
     Integer sommaPartecipantiPerViaggio(@Param("viaggioId") UUID viaggioId);
 
-    // Prenotazioni "scadute" da completare: confermate con viaggio già finito.
-    // Usata da un job schedulato che le sposta in COMPLETATA.
+
     @Query("""
            SELECT p FROM Prenotazione p
            WHERE p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.CONFERMATA
              AND p.viaggioDataFineSnap < CURRENT_DATE
            """)
     List<Prenotazione> trovaDaCompletare();
+
+    //evita race condition sullo stesso viaggio
+    @Query(value = """
+           SELECT COUNT(*) FROM (
+               SELECT pg_advisory_xact_lock(hashtext(:viaggioId))
+           ) AS lock_acquisito
+           """, nativeQuery = true)
+    Long bloccaViaggio(@Param("viaggioId") String viaggioId);
 }

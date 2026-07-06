@@ -46,6 +46,8 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
 
 management:
   endpoints:
@@ -60,13 +62,16 @@ springdoc:
   swagger-ui:
     urls:
       - name: Booking Service
-        url: http://localhost:8081/v3/api-docs
+        url: http://localhost:8083/v3/api-docs
 
       - name: Review Service
-        url: http://localhost:8082/v3/api-docs
+        url: http://localhost:8085/v3/api-docs
 
       - name: Itinerary Service
-        url: http://localhost:8083/v3/api-docs
+        url: http://localhost:8082/v3/api-docs
 
       - name: Catalog Service
         url: http://localhost:8084/v3/api-docs
+
+      - name: User Auth Service
+        url: http://localhost:8086/v3/api-docs

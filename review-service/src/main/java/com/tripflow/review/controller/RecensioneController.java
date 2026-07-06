@@ -24,9 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
-// REST controller per Recensione.
-// L'identità (id + nome) arriva dal JWT validato (SecurityUtils),
-// non più dagli header X-Viaggiatore-Id / X-Viaggiatore-Nome.
 
 @RestController
 @RequestMapping("/api/recensioni")

@@ -19,7 +19,7 @@ public class PagamentoResponse {
     private MetodoPagamento metodo;
     private StatoPagamento stato;
 
-    // Dati per il frontend (oscurati per sicurezza)
+    //dati per frontend
     private String ultimeQuattroCifre;
     private String brandCarta;
 

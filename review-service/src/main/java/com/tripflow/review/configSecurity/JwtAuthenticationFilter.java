@@ -22,11 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Valida il JWT in ogni richiesta (strategia "self-validation", come catalog-service):
- * non ci fidiamo di header iniettati a monte, l'identità arriva dal token firmato.
- * Stesso segreto condiviso (property jwt.secret) tra tutti i microservizi.
- */
+
 @Component
 @Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -73,8 +69,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 SecurityContextHolder.getContext().setAuthentication(authToken);
             }
         } catch (Exception e) {
-            // Token invalido/scaduto: si prosegue come NON autenticati.
-            // Sarà SecurityConfig (anyRequest().authenticated()) a rispondere 401/403.
             log.warn("JWT non valido: {}", e.getMessage());
         }
 

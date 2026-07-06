@@ -74,6 +74,11 @@ public class RecensioneServiceImpl implements RecensioneService {
 
         String oggettoNomeSnap = recuperaNomeOggetto(request.getTipoOggetto(), request.getOggettoId());
 
+        //autore_nome_snap e NOT NULL: se il token non porta il claim "nome", fallback
+        if (autoreNome == null || autoreNome.isBlank()) {
+            autoreNome = "Viaggiatore";
+        }
+
 
         Recensione recensione = Recensione.builder()
                 .viaggiatoreId(viaggiatoreId)

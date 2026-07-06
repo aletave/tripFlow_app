@@ -22,24 +22,23 @@ public class PrenotazioneResponse {
     private UUID viaggiatoreId;
     private UUID viaggioId;
 
-    // Snapshot del viaggio (Dati congelati)
+    //Snapshot del viaggio (Dati congelati)
     private String titoloViaggio;
     private String destinazione;
     private LocalDate dataInizio;
     private LocalDate dataFine;
     private BigDecimal prezzoUnitarioAlMomentoDelBooking;
 
-    // Dati calcolati e stato
+    //Dati calcolati e stato
     private Integer numeroPartecipanti;
     private BigDecimal prezzoTotale;
     private StatoPrenotazione stato;
     private LocalDateTime dataPrenotazione;
     private String note;
 
-    // Dettagli relazioni (usando altri Response DTO)
+    //Dettagli relazioni
     private List<PrenotazioneAttivitaResponse> attivitaSelezionate;
     private PagamentoResponse infoPagamento;
 
-    // Audit
     private LocalDateTime createdAt;
 }

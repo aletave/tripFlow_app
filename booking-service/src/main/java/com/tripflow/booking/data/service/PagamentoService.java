@@ -14,6 +14,6 @@ public interface PagamentoService {
     PagamentoResponse confermaPagamento(String stripePaymentIntentId);
     PagamentoResponse gestisciPagamentoFallito(String stripePaymentIntentId);
 
-    // rimborso (chiamato internamente da PrenotazioneService.annullaPrenotazione)
+    //rimborso (chiamato internamente da PrenotazioneService.annullaPrenotazione)
     PagamentoResponse rimborsaPagamento(UUID prenotazioneId);
 }

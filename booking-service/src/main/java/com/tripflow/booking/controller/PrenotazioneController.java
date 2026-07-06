@@ -1,6 +1,7 @@
 package com.tripflow.booking.controller;
 
 import com.tripflow.booking.configSecurity.SecurityUtils;
+import com.tripflow.booking.configSecurity.UtenteAutenticato;
 import com.tripflow.booking.data.dto.requests.PrenotazioneAttivitaRequest;
 import com.tripflow.booking.data.dto.requests.PrenotazioneRequest;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
@@ -11,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -35,7 +37,6 @@ public class PrenotazioneController {
 
     private final PrenotazioneService prenotazioneService;
 
-    //viaggiatore
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PrenotazioneResponse crea(@Valid @RequestBody PrenotazioneRequest request) {
@@ -57,7 +58,7 @@ public class PrenotazioneController {
         return prenotazioneService.trovaMiePrenotazioniAttive(SecurityUtils.viaggiatoreId());
     }
 
-    //Transizione di stato: la prenotazione non viene cancellata.
+    //Transizione di stato: la prenotazione non viene cancellata
     @PatchMapping("/{id}/annulla")
     public PrenotazioneResponse annulla(@PathVariable UUID id) {
         return prenotazioneService.annullaPrenotazione(id, SecurityUtils.viaggiatoreId());
@@ -85,17 +86,17 @@ public class PrenotazioneController {
     // Organizzatore
     //Tutte le prenotazioni ricevute per un viaggio.
 
-    //TODO: proteggere con @PreAuthorize quando ci saranno i ruoli — solo l'organizzatore
-    //proprietario del viaggio deve poter chiamare questo endpoint.
+    //Solo un ORGANIZER può chiamarlo. che il viaggio sia proprio suo
+    //lo verifica il service interrogando il catalog
+    @PreAuthorize("hasRole('ORGANIZER')")
     @GetMapping("/viaggio/{viaggioId}")
     public List<PrenotazioneResponse> perViaggio(@PathVariable UUID viaggioId) {
-        return prenotazioneService.trovaPrenotazioniPerViaggio(viaggioId);
+        return prenotazioneService.trovaPrenotazioniPerViaggio(
+                viaggioId, SecurityUtils.viaggiatoreId());
     }
 
     //ricerca dinamica
 
-    //TODO: limitare in base ai ruoli (un viaggiatore non deve poter cercare
-    //le prenotazioni di altri).
     @GetMapping("/cerca")
     public List<PrenotazioneResponse> cerca(
             @RequestParam(required = false) UUID viaggiatoreId,
@@ -107,6 +108,13 @@ public class PrenotazioneController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime a,
             @RequestParam(required = false) BigDecimal prezzoMin,
             @RequestParam(required = false) BigDecimal prezzoMax) {
+
+
+        UtenteAutenticato utente = SecurityUtils.utenteCorrente();
+        if (!"ORGANIZER".equals(utente.ruolo())) {
+            viaggiatoreId = utente.id();
+        }
+
         return prenotazioneService.ricerca(viaggiatoreId, viaggioId, stato, da, a, prezzoMin, prezzoMax);
     }
 }

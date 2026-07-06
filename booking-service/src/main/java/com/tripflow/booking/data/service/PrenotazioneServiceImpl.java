@@ -12,6 +12,7 @@ import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
 import com.tripflow.booking.data.entities.Prenotazione;
 import com.tripflow.booking.data.entities.PrenotazioneAttivita;
 import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
+import com.tripflow.booking.data.service.events.PagamentoCompletatoEvent;
 import com.tripflow.booking.data.service.events.PrenotazioneAnnullataEvent;
 import com.tripflow.booking.exception.BookingException;
 import com.tripflow.booking.exception.PrenotazioneNotFoundException;
@@ -21,8 +22,10 @@ import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,10 +53,11 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         log.info("Creazione prenotazione: viaggiatore={}, viaggio={}, partecipanti={}",
                 viaggiatoreId, request.getViaggioId(), request.getNumeroPartecipanti());
 
-        //Recupero dati viaggio (e attività) dal catalog..
+        //Recupero dati dal catalog
         TripResponseDTO viaggio = recuperaViaggio(request.getViaggioId());
 
-        //Check disponibilità posti.
+        prenotazioneRepository.bloccaViaggio(request.getViaggioId().toString());
+
         Integer giaPrenotati = prenotazioneRepository.sommaPartecipantiPerViaggio(request.getViaggioId());
         int richiesti = request.getNumeroPartecipanti();
         if (giaPrenotati + richiesti > viaggio.getAvailableSpots()) {
@@ -79,7 +83,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
             }
         }
 
-        // 5. Costruzione entity Prenotazione con snapshot dati dal catalog.
+        //Costruzione entity Prenotazione con snapshot dati dal catalog.
         Prenotazione prenotazione = Prenotazione.builder()
                 .viaggiatoreId(viaggiatoreId)
                 .viaggioId(viaggio.getId())
@@ -106,10 +110,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
             prenotazione.aggiungiAttivita(pa);
         }
 
-        //Calcolo prezzo totale.
         prenotazione.ricalcolaPrezzoTotale();
-
-        //save
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
         log.info("Prenotazione creata: id={}, prezzoTotale={}, attivita={}",
@@ -125,7 +126,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        // Check ownership
         if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
             log.warn("Accesso negato a prenotazione {}: richiesto da {}, appartiene a {}",
                     prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
@@ -161,7 +161,16 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PrenotazioneResponse> trovaPrenotazioniPerViaggio(UUID viaggioId) {
+    public List<PrenotazioneResponse> trovaPrenotazioniPerViaggio(UUID viaggioId,
+                                                                  UUID organizzatoreId) {
+
+        TripResponseDTO viaggio = recuperaViaggio(viaggioId);
+        if (!organizzatoreId.equals(viaggio.getOrganizerId())) {
+            log.warn("Vista prenotazioni negata su viaggio {}: richiesto da {}, organizzatore reale {}",
+                    viaggioId, organizzatoreId, viaggio.getOrganizerId());
+            throw new AccessDeniedException("Viaggio non gestito da questo organizzatore");
+        }
+
         return prenotazioneRepository.findByViaggioId(viaggioId)
                 .stream()
                 .map(PrenotazioneMapper::toResponse)
@@ -171,7 +180,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
     @Override
     public PrenotazioneResponse annullaPrenotazione(UUID prenotazioneId, UUID viaggiatoreId) {
 
-        //Carico (con attività per il mapping finale)
+        //Carico
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
@@ -182,7 +191,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
             throw new AccessDeniedException("Prenotazione non accessibile");
         }
 
-        //Check stato: annullabili solo IN_ATTESA e CONFERMATA
         StatoPrenotazione statoAttuale = prenotazione.getStato();
         if (statoAttuale != StatoPrenotazione.IN_ATTESA
                 && statoAttuale != StatoPrenotazione.CONFERMATA) {
@@ -192,15 +200,11 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
         boolean eraConfermata = (statoAttuale == StatoPrenotazione.CONFERMATA);
 
-        //Cambio stato e salvo
         prenotazione.setStato(StatoPrenotazione.ANNULLATA);
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
         log.info("Prenotazione {} annullata (eraConfermata={})", prenotazioneId, eraConfermata);
 
-        //Pubblico evento.
-        //Listener sincrono nella stessa transazione: se il rimborso fallisce,
-        //l'intera operazione di annullamento viene rollback.
         eventPublisher.publishEvent(new PrenotazioneAnnullataEvent(prenotazioneId, eraConfermata));
 
         return PrenotazioneMapper.toResponse(saved);
@@ -211,24 +215,21 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                                                  UUID viaggiatoreId,
                                                  PrenotazioneAttivitaRequest request) {
 
-        //Carico la prenotazione con le attività (serve per ricalcolare il prezzo)
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        //Check ownership
         if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
             log.warn("Modifica negata su prenotazione {}: richiesto da {}, appartiene a {}",
                     prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
             throw new AccessDeniedException("Prenotazione non accessibile");
         }
 
-        //Check stato: si può modificare solo se IN_ATTESA
         if (prenotazione.getStato() != StatoPrenotazione.IN_ATTESA) {
             throw new StatoPrenotazioneException(
                     "Impossibile aggiungere attività: prenotazione in stato " + prenotazione.getStato());
         }
 
-        //Check duplicato: l'attività non deve essere già presente.
+        //Check duplicato
         UUID attivitaId = request.getAttivitaId();
         boolean giaPresente = prenotazione.getAttivitaSelezionate().stream()
                 .anyMatch(a -> a.getAttivitaId().equals(attivitaId));
@@ -240,16 +241,13 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         //Chiamo il catalog per i dati reali dell'attività.
         ActivityResponseDTO att = recuperaAttivita(attivitaId);
 
-        //Coerenza: l'attività deve appartenere allo stesso viaggio della
-        //prenotazione, altrimenti l'utente potrebbe aggiungere attività
-        //casuali da altri viaggi.
+
         if (!att.getTripId().equals(prenotazione.getViaggioId())) {
             throw new BookingException(
                     "Attività " + attivitaId + " non appartiene al viaggio " +
                             prenotazione.getViaggioId());
         }
 
-        //Check posti attività.
         if (prenotazione.getNumeroPartecipanti() > att.getAvailableSpots()) {
             throw new BookingException(
                     "Posti insufficienti per l'attività " + att.getId() +
@@ -264,11 +262,9 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                 .attivitaDurataSnap(att.getDuration())
                 .build();
 
-        //Aggiungo (helper bidirezionale) e ricalcolo il prezzo
         prenotazione.aggiungiAttivita(nuovaAttivita);
         prenotazione.ricalcolaPrezzoTotale();
 
-        //Save: il cascade salva anche la nuova PrenotazioneAttivita
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
         log.info("Attività {} aggiunta a prenotazione {}, nuovo prezzoTotale={}",
@@ -306,12 +302,9 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                 .orElseThrow(() -> new StatoPrenotazioneException(
                         "Attività " + attivitaId + " non presente nella prenotazione"));
 
-        //Rimuovo (helper bidirezionale: orphanRemoval cancellerà la riga in DB)
-        //e ricalcolo il prezzo
         prenotazione.rimuoviAttivita(daRimuovere);
         prenotazione.ricalcolaPrezzoTotale();
 
-        //Save
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
         log.info("Attività {} rimossa da prenotazione {}, nuovo prezzoTotale={}",
@@ -354,7 +347,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
     @Override
     public PrenotazioneResponse confermaPrenotazione(UUID prenotazioneId) {
 
-        //Carico (con attività per il response finale)
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
@@ -370,7 +362,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                     "Impossibile confermare: prenotazione in stato " + statoAttuale);
         }
 
-        //Transizione e save
         prenotazione.setStato(StatoPrenotazione.CONFERMATA);
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
@@ -379,7 +370,17 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         return PrenotazioneMapper.toResponse(saved);
     }
 
+
+    @EventListener
+    public void onPagamentoCompletato(PagamentoCompletatoEvent event) {
+        log.debug("Ricevuto evento PagamentoCompletato per prenotazione {}",
+                event.prenotazioneId());
+
+        confermaPrenotazione(event.prenotazioneId());
+    }
+
     @Override
+    @Scheduled(cron = "0 0 3 * * *")
     public int completaPrenotazioniScadute() {
 
         List<Prenotazione> daCompletare = prenotazioneRepository.trovaDaCompletare();

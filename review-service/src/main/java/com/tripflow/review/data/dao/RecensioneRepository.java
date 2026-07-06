@@ -29,8 +29,8 @@ public interface RecensioneRepository extends JpaRepository<Recensione, UUID> {
 
     //custom
 
-    // Media stelle per un oggetto.
-    // COALESCE evita NULL quando non ci sono recensioni: ritorna 0.
+    //media stelle per un oggetto
+    //COALESCE evita NULL quando non ci sono recensioni: ritorna 0
     @Query("""
            SELECT COALESCE(AVG(r.valutazione), 0) FROM Recensione r
            WHERE r.oggettoId = :oggettoId

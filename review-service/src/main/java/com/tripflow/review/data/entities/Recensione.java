@@ -48,7 +48,7 @@ public class Recensione {
     private UUID prenotazioneId;
 
 
-    // oggetto recensito (associazione polimorfica)
+    //oggetto recensito (associazione polimorfica)
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_oggetto", nullable = false, length = 20)
     private TipoOggetto tipoOggetto;
@@ -57,7 +57,7 @@ public class Recensione {
     private UUID oggettoId;
 
 
-    //Dati SNAPSHOT
+    //Dati snapshot
     @Column(name = "oggetto_nome_snap", nullable = false, length = 255)
     private String oggettoNomeSnap;
 
@@ -76,7 +76,7 @@ public class Recensione {
     private String commento;
 
 
-    // AUDIT
+    //audit
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -5,11 +5,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.UUID;
 
-/**
- * Accesso comodo all'identità autenticata presente nel SecurityContext.
- * I controller leggono id e nome del viaggiatore da qui
- * (prima arrivavano dagli header X-Viaggiatore-Id / X-Viaggiatore-Nome).
- */
+
 public final class SecurityUtils {
 
     private SecurityUtils() {

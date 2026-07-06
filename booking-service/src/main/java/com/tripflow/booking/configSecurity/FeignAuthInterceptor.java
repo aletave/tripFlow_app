@@ -7,8 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-//Propaga l'header Authorization (Bearer) della richiesta entrante alle chiamate Feign
-//verso gli altri microservizi, così che anche loro possano validare lo stesso JWT.
+
 @Configuration
 public class FeignAuthInterceptor {
 

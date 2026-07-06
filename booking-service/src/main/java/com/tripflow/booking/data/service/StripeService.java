@@ -17,6 +17,7 @@ import com.stripe.param.PaymentIntentRetrieveParams;
 import com.tripflow.booking.data.entities.enums.MetodoPagamento;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.UUID;
 
 @Service
@@ -35,7 +36,12 @@ public class StripeService {
     //crea un PaymentIntent su Stripe. Usato da avviaPagamento.
     public PaymentIntent creaPaymentIntent(BigDecimal importoEuro, UUID prenotazioneId) {
 
-        long importoCentesimi = importoEuro.movePointRight(2).longValueExact();
+        //setScale(2) prima della conversione: se mai arrivasse un prezzo con
+        //più di 2 decimali, longValueExact() lancerebbe ArithmeticException.
+        long importoCentesimi = importoEuro
+                .setScale(2, RoundingMode.HALF_UP)
+                .movePointRight(2)
+                .longValueExact();
 
         PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
                 .setAmount(importoCentesimi)

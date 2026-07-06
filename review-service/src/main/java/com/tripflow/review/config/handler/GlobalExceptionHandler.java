@@ -18,7 +18,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.Date;
 import java.util.stream.Collectors;
 
-// Global Exception Handler per il review-service.
+//Global Exception Handler per il review-service.
 
 @RestControllerAdvice
 @Slf4j

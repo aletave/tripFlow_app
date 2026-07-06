@@ -12,7 +12,7 @@ import java.util.UUID;
 public final class PrenotazioneSpecification {
 
     private PrenotazioneSpecification() {
-        // classe utility, singleton, non istanziabile
+        //singleton
     }
 
     public static Specification<Prenotazione> viaggiatoreEquals(UUID viaggiatoreId) {

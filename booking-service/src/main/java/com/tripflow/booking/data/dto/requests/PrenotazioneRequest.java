@@ -26,6 +26,6 @@ public class PrenotazioneRequest {
     @Size(max = 1000, message = "Le note non possono superare i 1000 caratteri")
     private String note;
 
-    // Lista di ID delle attività aggiuntive
+    //Lista di ID delle attività aggiuntive
     private List<UUID> attivitaIds;
 }

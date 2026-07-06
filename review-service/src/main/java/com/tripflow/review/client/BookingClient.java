@@ -7,10 +7,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
 
-// Client REST verso booking.
-// L'header Authorization (Bearer) viene propagato automaticamente da FeignAuthInterceptor,
-// così booking valida lo stesso JWT e ricava da sé il viaggiatore (per il check ownership).
-@FeignClient(name = "booking-service", url = "${tripflow.booking.base-url}")
+
+@FeignClient(name = "booking-service")
 public interface BookingClient {
 
     @GetMapping("/api/prenotazioni/{id}")

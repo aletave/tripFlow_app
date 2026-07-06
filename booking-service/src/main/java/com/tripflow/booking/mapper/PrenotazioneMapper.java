@@ -7,13 +7,6 @@ import com.tripflow.booking.data.entities.PrenotazioneAttivita;
 
 import java.util.List;
 
-/**
- * Conversioni Entity -> DTO per Prenotazione e PrenotazioneAttivita.
- *
- * Solo direzione entity -> DTO: il senso opposto (Request -> Entity)
- * lo fa direttamente il service, perché serve accesso al catalog
- * per popolare gli snapshot, e quindi non è una mappatura "pura".
- */
 public final class PrenotazioneMapper {
 
     private PrenotazioneMapper() {

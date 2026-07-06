@@ -7,11 +7,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/**
- * Propaga l'header Authorization (Bearer) della richiesta entrante alle chiamate Feign
- * (BookingClient, CatalogClient), così che anche quei servizi validino lo stesso JWT.
- * Senza una richiesta HTTP in corso (es. listener eventi) non fa nulla.
- */
+
 @Configuration
 public class FeignAuthInterceptor {
 

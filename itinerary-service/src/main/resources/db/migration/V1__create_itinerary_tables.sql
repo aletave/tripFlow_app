@@ -24,8 +24,8 @@ CREATE TABLE itinerary_stops (
 
                                  stop_type VARCHAR(30) NOT NULL,
 
-                                 viaggio_id BIGINT,
-                                 attivita_id BIGINT,
+                                 viaggio_id UUID,
+                                 attivita_id UUID,
 
                                  custom_title VARCHAR(150),
                                  custom_description TEXT,

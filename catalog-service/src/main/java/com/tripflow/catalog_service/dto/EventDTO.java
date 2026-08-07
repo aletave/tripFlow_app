@@ -1,11 +1,13 @@
 package com.tripflow.catalog_service.dto;
 
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 import java.time.LocalDateTime;
 
 @Setter
 @Getter
+@NoArgsConstructor
 public class EventDTO<T> {
 
     private String eventType;

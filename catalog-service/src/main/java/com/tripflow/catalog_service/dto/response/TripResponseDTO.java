@@ -19,6 +19,7 @@ public class TripResponseDTO {
     private String description;
     private List<String> images;
     private List<ActivityResponseDTO> activities;
+    private Integer bookedSpots;
 
 
 }

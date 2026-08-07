@@ -82,4 +82,9 @@ public class Trip {
         a.setTrip(null);
     }
 
+    @Getter
+    @Setter
+    @Column(name = "booked_spots")
+    private Integer bookedSpots = 0;
+
 }

@@ -24,7 +24,7 @@ public class TripServiceImpl implements TripService {
     public TripServiceImpl(ModelMapper modelMapper, TripRepository tripRepository, TripEventProducer tripEventProducer) {
         this.modelMapper = modelMapper;
         this.tripRepository = tripRepository;
-        this.tripEventProducer=tripEventProducer;
+        this.tripEventProducer = tripEventProducer;
     }
 
     @Override
@@ -66,7 +66,7 @@ public class TripServiceImpl implements TripService {
 
         Trip updatedTrip = tripRepository.save(existingTrip);
 
-        TripResponseDTO responseDTO= modelMapper.map(updatedTrip, TripResponseDTO.class);
+        TripResponseDTO responseDTO = modelMapper.map(updatedTrip, TripResponseDTO.class);
 
         tripEventProducer.sendTripUpdatedEvent(responseDTO);
 
@@ -118,13 +118,12 @@ public class TripServiceImpl implements TripService {
         Trip trip = tripRepository.findById(tripId).orElseThrow(()
                 -> new ResourceNotFoundException("Viaggio non trovato con id " + tripId));
 
-        if (trip.getAvailableSpots() < spots) {
-            throw new RuntimeException("Posti insufficienti");
-        }
-        trip.setAvailableSpots(trip.getAvailableSpots() - spots);
-        tripRepository.save(trip);
-        System.out.println("[CATALOG DB] Scalati " + spots + " posti dal viaggio " + trip.getName());
+        int currentBooked = trip.getBookedSpots() != null ? trip.getBookedSpots() : 0;
 
+        trip.setBookedSpots(currentBooked + spots);
+        tripRepository.save(trip);
+
+        System.out.println("[CATALOG DB] Registrati " + spots + " nuovi posti prenotati per il viaggio " + trip.getName());
     }
 
     @Override
@@ -133,10 +132,12 @@ public class TripServiceImpl implements TripService {
         Trip trip = tripRepository.findById(tripId).orElseThrow(()
                 -> new ResourceNotFoundException("Viaggio non trovato con id " + tripId));
 
-        trip.setAvailableSpots(trip.getAvailableSpots() - spots);
-        tripRepository.save(trip);
-        System.out.println("[CATALOG DB] Ripristinati " + spots + " posti dal viaggio " + trip.getName());
+        int currentBooked = trip.getBookedSpots() != null ? trip.getBookedSpots() : 0;
 
+        trip.setBookedSpots(Math.max(0, currentBooked - spots));
+        tripRepository.save(trip);
+
+        System.out.println("[CATALOG DB] Rilasciati " + spots + " posti dal viaggio " + trip.getName());
     }
 }
 

@@ -27,6 +27,10 @@ public class User {
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
+    //id dell'utente in Keycloak: arriva come stringa dalla response dell'Admin API
+    @Column(name = "keycloak_id", unique = true, length = 36)
+    private String keycloakId;
+
     @Column(name = "first_name", nullable = false, length = 100)
     private String firstName;
 
@@ -35,9 +39,6 @@ public class User {
 
     @Column(nullable = false, unique = true, length = 255)
     private String email;
-
-    @Column(name = "password_hash", nullable = false, length = 255)
-    private String passwordHash;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)

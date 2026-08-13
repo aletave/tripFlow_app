@@ -6,5 +6,3 @@ public enum StatoPagamento {
     FALLITO,
     RIMBORSATO
 }
-
-//TODO: Stripe non rimborserà i pagamenti, valutare successivamete di rimuovere stato RIMBORSATO

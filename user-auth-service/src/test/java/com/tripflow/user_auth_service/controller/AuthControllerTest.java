@@ -2,10 +2,12 @@ package com.tripflow.user_auth_service.controller;
 
 import com.nimbusds.jose.jwk.RSAKey;
 import com.tripflow.user_auth_service.configSecurity.SecurityConfig;
+import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
 import com.tripflow.user_auth_service.dto.response.RegisterResponse;
 import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
+import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import com.tripflow.user_auth_service.model.Role;
 import com.tripflow.user_auth_service.service.AuthService;
 import org.junit.jupiter.api.Test;
@@ -72,6 +74,15 @@ class AuthControllerTest {
     }
 
     @Test
+    void register_jsonMalformato_400() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ questa non è una stringa JSON valida"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Corpo della richiesta non leggibile o JSON malformato"));
+    }
+
+    @Test
     void register_bodyInvalido_400() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -110,6 +121,22 @@ class AuthControllerTest {
     }
 
     @Test
+    void routeInesistente_404() throws Exception {
+        mockMvc.perform(get("/api/auth/inesistente")
+                        .with(jwt().jwt(j -> j.subject("kc-123"))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Risorsa non trovata: api/auth/inesistente"));
+    }
+
+    @Test
+    void metodoNonSupportato_405() throws Exception {
+        mockMvc.perform(post("/api/auth/me")
+                        .with(jwt().jwt(j -> j.subject("kc-123"))))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.message").value("Metodo HTTP non supportato: POST"));
+    }
+
+    @Test
     void getMe_senzaToken_401() throws Exception {
         mockMvc.perform(get("/api/auth/me"))
                 .andExpect(status().isUnauthorized());
@@ -128,6 +155,16 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.role").value("TRAVELER"));
 
         verify(authService).getMe("kc-123");
+    }
+
+    @Test
+    void getMe_erroreInterno_500ConMessaggioGenerico() throws Exception {
+        when(authService.getMe("kc-123")).thenThrow(new RuntimeException("dettaglio interno non esposto"));
+
+        mockMvc.perform(get("/api/auth/me")
+                        .with(jwt().jwt(j -> j.subject("kc-123"))))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Errore interno del server"));
     }
 
     @Test
@@ -153,7 +190,7 @@ class AuthControllerTest {
                         .with(jwt().jwt(j -> j.subject("kc-123")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"oldPassword": "password", "newPassword": "password2"}
+                                {"newPassword": "password2"}
                                 """))
                 .andExpect(status().isNoContent());
 
@@ -167,6 +204,31 @@ class AuthControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(authService).deleteMe("kc-123");
+    }
+
+    @Test
+    void getPublicUserByKeycloakId_esistente_200() throws Exception {
+        when(authService.getPublicUserByKeycloakId("kc-123")).thenReturn(new PublicUserResponse(
+                ID, "Mario", "Rossi", Role.TRAVELER, null));
+
+        mockMvc.perform(get("/api/auth/users/by-keycloak/kc-123")
+                        .with(jwt().jwt(j -> j.subject("kc-123"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ID.toString()))
+                .andExpect(jsonPath("$.firstName").value("Mario"))
+                .andExpect(jsonPath("$.role").value("TRAVELER"));
+
+        verify(authService).getPublicUserByKeycloakId("kc-123");
+    }
+
+    @Test
+    void getPublicUserByKeycloakId_inesistente_404() throws Exception {
+        when(authService.getPublicUserByKeycloakId("kc-inesistente"))
+                .thenThrow(new ResourceNotFoundException("Utente non trovato con keycloak_id: kc-inesistente"));
+
+        mockMvc.perform(get("/api/auth/users/by-keycloak/kc-inesistente")
+                        .with(jwt().jwt(j -> j.subject("kc-123"))))
+                .andExpect(status().isNotFound());
     }
 
     //JwtDecoder locale con chiave RSA di test: la security chain di SecurityConfig

@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 //Service di autenticazione e gestione profilo.
@@ -33,25 +34,31 @@ public class AuthService {
     //Registrazione con scrittura doppia (dual-write) in ordine DB-check -> Keycloak -> DB-save.
     //Se il salvataggio su DB fallisce, compensa cancellando l'utente da Keycloak (con 1 retry).
     public RegisterResponse register(RegisterRequest request) {
+        //email normalizzata: Keycloak è case-insensitive, il DB no — evita doppioni con maiuscole
+        String email = request.email().toLowerCase(Locale.ROOT);
+
         //1. controllo su DB: email già registrata -> 409, STOP
-        if (userRepository.existsByEmail(request.email())) {
-            throw new EmailAlreadyExistsException(request.email());
+        if (userRepository.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException(email);
         }
 
-        //2. creazione su Keycloak (+ assegnazione ruolo)
+        //2. creazione su Keycloak (+ assegnazione ruolo); su 409 il client adotta l'account
+        //orfano solo se non esiste già nel DB locale (predicate). Si ricontrolla anche l'email:
+        //nel frattempo un'altra registrazione concorrente potrebbe aver salvato proprio quell'utente
         String keycloakId = keycloakAdminClient.createUser(
-                request.email(),
+                email,
                 request.password(),
                 request.firstName(),
                 request.lastName(),
-                request.role().name());
+                request.role().name(),
+                id -> !userRepository.existsByKeycloakId(id) && !userRepository.existsByEmail(email));
 
         //3. salvataggio su DB, con compensazione in caso di errore
         User user = new User();
         user.setKeycloakId(keycloakId);
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setEmail(request.email());
+        user.setEmail(email);
         user.setRole(request.role());
         user.setDateOfBirth(request.dateOfBirth());
         user.setPhoneNumber(request.phoneNumber());
@@ -93,12 +100,25 @@ public class AuthService {
         keycloakAdminClient.changePassword(user.getKeycloakId(), request.newPassword());
     }
 
-    //Eliminazione account: prima da Keycloak, poi dal DB locale.
+    //Eliminazione account: prima il DB locale, poi Keycloak.
+    //Se la cancellazione su Keycloak fallisce, l'account resta lì come orfano:
+    //verrà riadottato (e sovrascritto) alla prossima registrazione con la stessa email.
     public void deleteMe(String keycloakId) {
         User user = loadByKeycloakId(keycloakId);
-        keycloakAdminClient.deleteUser(user.getKeycloakId());
         userRepository.delete(user);
+        try {
+            keycloakAdminClient.deleteUser(user.getKeycloakId());
+        } catch (RuntimeException e) {
+            log.warn("Account locale eliminato, ma la cancellazione su Keycloak è fallita per {}", keycloakId, e);
+        }
         log.info("Account eliminato: keycloak_id={}", keycloakId);
+    }
+
+    //Recupero del profilo pubblico di un utente per keycloak_id (il "sub" del JWT Keycloak).
+    //Usato dagli altri servizi per risolvere l'utente di una prenotazione/recensione:
+    //salvano viaggiatore_id = sub, quindi il lookup per id DB locale non li copre.
+    public PublicUserResponse getPublicUserByKeycloakId(String keycloakId) {
+        return toPublicUserResponse(loadByKeycloakId(keycloakId));
     }
 
     //Recupero del profilo pubblico di un utente per id DB.
@@ -111,7 +131,16 @@ public class AuthService {
     //Recupero dei profili pubblici per lista di email: usato dagli altri servizi/app
     //per risolvere i nomi degli utenti (es. autore di una recensione).
     public List<PublicUserResponse> lookupByEmails(List<String> emails) {
-        return userRepository.findByEmailIn(emails)
+        //le email arrivano non normalizzate da chi chiama: si filtrano i valori vuoti
+        //e si abbassa il case, altrimenti le maiuscole non troverebbero nulla
+        List<String> emailNormalizzate = emails.stream()
+                .filter(email -> email != null && !email.isBlank())
+                .map(email -> email.toLowerCase(Locale.ROOT))
+                .toList();
+        if (emailNormalizzate.isEmpty()) {
+            return List.of();
+        }
+        return userRepository.findByEmailIn(emailNormalizzate)
                 .stream()
                 .map(this::toPublicUserResponse)
                 .toList();
@@ -126,6 +155,12 @@ public class AuthService {
     //Se il salvataggio su DB fallisce dopo la creazione su Keycloak, elimina l'utente
     //dall'IdP per non lasciare orfani: retry 1x, poi log dell'eventuale residuo.
     private void compensaUtenteOrfano(String keycloakId) {
+        //guard: se nel frattempo un'altra richiesta ha salvato la riga per questo account,
+        //non è più un orfano — cancellarlo da Keycloak distruggerebbe un utente legittimo
+        if (userRepository.existsByKeycloakId(keycloakId)) {
+            log.warn("Compensazione saltata: l'utente {} esiste già nel DB locale", keycloakId);
+            return;
+        }
         try {
             keycloakAdminClient.deleteUser(keycloakId);
             log.info("Compensazione riuscita: utente {} rimosso da Keycloak", keycloakId);

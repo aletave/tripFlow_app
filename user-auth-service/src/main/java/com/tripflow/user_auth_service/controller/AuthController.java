@@ -79,6 +79,13 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
+    //Profilo pubblico di un utente per keycloak_id (il "sub" del JWT Keycloak):
+    //gli altri servizi salvano viaggiatore_id = sub, quindi risolvono i nomi qui.
+    @GetMapping("/users/by-keycloak/{keycloakId}")
+    public ResponseEntity<PublicUserResponse> getPublicUserByKeycloakId(@PathVariable String keycloakId) {
+        return ResponseEntity.ok(authService.getPublicUserByKeycloakId(keycloakId));
+    }
+
     //Profilo pubblico di un utente per id (dati minimi: nessuna email/telefono).
     @GetMapping("/users/{id}")
     public ResponseEntity<PublicUserResponse> getPublicUser(@PathVariable UUID id) {

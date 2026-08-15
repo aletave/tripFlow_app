@@ -27,10 +27,6 @@ public class ActivityController {
         this.activityService = activityService;
     }
 
-    private UUID getCurrentUserId() {
-        String id = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return UUID.fromString(id);
-    }
 
     @PostMapping
     @PreAuthorize("hasRole('ORGANIZER')")

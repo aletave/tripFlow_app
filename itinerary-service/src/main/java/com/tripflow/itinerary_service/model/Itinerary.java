@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 //si occuperà lombok per fare getter e setter in maniera automatico.
 @Getter
@@ -21,7 +22,7 @@ public class Itinerary {
     private Long id;
 
     @Column(name = "owner_id", nullable = false)
-    private Long ownerId;
+    private UUID ownerId;
 
     @Column(nullable = false, length = 150)
     private String title;

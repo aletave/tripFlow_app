@@ -11,7 +11,7 @@ spring:
         webflux:
           discovery:
             locator:
-              enabled: true
+              enabled: false
 
           routes:
             - id: booking-service
@@ -42,6 +42,13 @@ spring:
               filters:
                 - RewritePath=/catalog-service/(?<segment>.*), /${segment}
 
+            - id: user-auth-service
+              uri: lb://USER-AUTH-SERVICE
+              predicates:
+                - Path=/user-auth-service/**
+              filters:
+                - RewritePath=/user-auth-service/(?<segment>.*), /${segment}
+
 eureka:
   client:
     service-url:
@@ -62,16 +69,16 @@ springdoc:
   swagger-ui:
     urls:
       - name: Booking Service
-        url: http://localhost:8083/v3/api-docs
+        url: /booking-service/v3/api-docs
 
       - name: Review Service
-        url: http://localhost:8085/v3/api-docs
+        url: /review-service/v3/api-docs
 
       - name: Itinerary Service
-        url: http://localhost:8082/v3/api-docs
+        url: /itinerary-service/v3/api-docs
 
       - name: Catalog Service
-        url: http://localhost:8084/v3/api-docs
+        url: /catalog-service/v3/api-docs
 
       - name: User Auth Service
-        url: http://localhost:8086/v3/api-docs
+        url: /user-auth-service/v3/api-docs

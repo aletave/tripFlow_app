@@ -100,6 +100,15 @@ public class TripServiceImpl implements TripService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<TripResponseDTO> getAllTrips() {
+        List<Trip> trips = tripRepository.findAll();
+
+        return trips.stream().map(trip -> modelMapper.map(trip, TripResponseDTO.class))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<TripResponseDTO> searchTrips(String destination, LocalDate startDate, LocalDate endDate, BigDecimal minPrice, BigDecimal maxPrice, Integer minAvailableSpots) {
 
         Specification<Trip> spec = TripSpecification.getFilterSpecification(

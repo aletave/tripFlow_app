@@ -38,6 +38,15 @@ public class TripController {
         return new ResponseEntity<>(createdTrip, HttpStatus.CREATED);
     }
 
+    @GetMapping
+    @Operation(summary = "Permette di ottenere tutti i viaggi del catalogo", description = "Restituisce la lista completa dei viaggi, vuota se non ce ne sono")
+    public ResponseEntity<List<TripResponseDTO>> getAllTrips() {
+
+        List<TripResponseDTO> trips = tripService.getAllTrips();
+
+        return ResponseEntity.ok(trips);
+    }
+
     @GetMapping("/{id}")
     @Operation(summary = "Permette di trovare un viaggio tramite l'id", description = "Cerca un viaggio nel database con una query avente l'id specificaato")
     public ResponseEntity<TripResponseDTO> getTripById(@PathVariable UUID id) {

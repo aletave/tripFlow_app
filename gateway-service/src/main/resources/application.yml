@@ -42,6 +42,13 @@ spring:
               filters:
                 - RewritePath=/catalog-service/(?<segment>.*), /${segment}
 
+            - id: user-auth-service
+              uri: lb://user-auth-service
+              predicates:
+                - Path=/user-auth-service/**
+              filters:
+                - RewritePath=/user-auth-service/(?<segment>.*), /${segment}
+
 eureka:
   client:
     service-url:

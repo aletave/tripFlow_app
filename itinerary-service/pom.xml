@@ -19,6 +19,12 @@
     <properties>
         <java.version>17</java.version>
         <spring-cloud.version>2024.0.0</spring-cloud.version>
+        <!-- Override delle versioni gestite da Spring Boot 3.4.3:
+             - Byte Buddy >= 1.17 serve a Mockito per creare mock su JDK 25
+             - Lombok >= 1.18.42 serve per compilare con il javac di JDK 25
+               (con 1.18.36 la compilazione crasha: TypeTag :: UNKNOWN) -->
+        <byte-buddy.version>1.18.12</byte-buddy.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>
@@ -69,7 +75,7 @@
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.5.0</version>
+            <version>2.8.9</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
@@ -79,6 +85,22 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>

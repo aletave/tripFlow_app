@@ -19,6 +19,8 @@ public interface TripService {
 
     List<TripResponseDTO> getTripsByOrganizer(UUID organizerId);
 
+    List<TripResponseDTO> getAllTrips();
+
     List<TripResponseDTO> searchTrips(String destination, LocalDate startDate, LocalDate endDate,
                                       BigDecimal minPrice, BigDecimal maxPrice, Integer minAvailableSpots);
 

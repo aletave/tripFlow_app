@@ -1,6 +1,7 @@
 package com.tripflow.catalog_service.controller;
 
 
+import com.tripflow.catalog_service.configSecurity.SecurityUtils;
 import com.tripflow.catalog_service.dto.request.TripRequestDTO;
 import com.tripflow.catalog_service.dto.response.TripResponseDTO;
 import com.tripflow.catalog_service.service.TripService;
@@ -11,8 +12,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -30,28 +29,28 @@ public class TripController {
         this.tripService = tripService;
     }
 
-    private UUID getCurrentUserId() {
-        Jwt jwt = (Jwt) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return UUID.fromString(jwt.getSubject());
-    }
-
     @PostMapping
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di creare un nuovo viaggio", description = "Salva il viaggio nel database e pubblica un evento tramite rabbitmq")
     public ResponseEntity<TripResponseDTO> createTrip(@Valid @RequestBody TripRequestDTO requestDTO) {
-
-        UUID organizerId = getCurrentUserId();
+        UUID organizerId = SecurityUtils.organizzatoreId();
         TripResponseDTO createdTrip = tripService.createTrip(requestDTO, organizerId);
-
         return new ResponseEntity<>(createdTrip, HttpStatus.CREATED);
+    }
+
+    @GetMapping
+    @Operation(summary = "Permette di ottenere tutti i viaggi del catalogo", description = "Restituisce la lista completa dei viaggi, vuota se non ce ne sono")
+    public ResponseEntity<List<TripResponseDTO>> getAllTrips() {
+
+        List<TripResponseDTO> trips = tripService.getAllTrips();
+
+        return ResponseEntity.ok(trips);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Permette di trovare un viaggio tramite l'id", description = "Cerca un viaggio nel database con una query avente l'id specificaato")
     public ResponseEntity<TripResponseDTO> getTripById(@PathVariable UUID id) {
-
         TripResponseDTO trip = tripService.getTripById(id);
-
         return ResponseEntity.ok(trip);
     }
 
@@ -59,11 +58,8 @@ public class TripController {
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di aggiornare i dettagli di un viaggio", description = "Aggiorna un viaggio nel db con una query che aggiorna i dettagli forniti")
     public ResponseEntity<TripResponseDTO> updateTrip(@PathVariable UUID id, @Valid @RequestBody TripRequestDTO requestDTO) {
-
-        UUID organizerId = getCurrentUserId();
+        UUID organizerId = SecurityUtils.organizzatoreId();
         TripResponseDTO updatedTrip = tripService.updateTrip(id, requestDTO, organizerId);
-
-
         return ResponseEntity.ok(updatedTrip);
     }
 
@@ -71,10 +67,8 @@ public class TripController {
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di eliminare un viaggio", description = "Elimina un dato viaggio nel db")
     public ResponseEntity<Void> deleteTrip(@PathVariable UUID id) {
-
-        UUID organizerId = getCurrentUserId();
+        UUID organizerId = SecurityUtils.organizzatoreId();
         tripService.deleteTrip(id, organizerId);
-
         return ResponseEntity.noContent().build();
     }
 
@@ -82,7 +76,6 @@ public class TripController {
     @Operation(summary = "Permette di trovare un viaggio tramite l'id dell'organizzatore", description = "Cerca un viaggio nel database con una query avente l'id dell'organizzatore")
     public ResponseEntity<List<TripResponseDTO>> getTripsByOrganizerId(@PathVariable UUID organizerId) {
         List<TripResponseDTO> trips = tripService.getTripsByOrganizer(organizerId);
-
         return ResponseEntity.ok(trips);
     }
 
@@ -93,9 +86,7 @@ public class TripController {
                                                              @RequestParam(required = false) BigDecimal minPrice,
                                                              @RequestParam(required = false) BigDecimal maxPrice,
                                                              @RequestParam(required = false) Integer minAvailableSpots) {
-
         List<TripResponseDTO> trips = tripService.searchTrips(destination, startDate, endDate, minPrice, maxPrice, minAvailableSpots);
-
         return ResponseEntity.ok(trips);
     }
 }

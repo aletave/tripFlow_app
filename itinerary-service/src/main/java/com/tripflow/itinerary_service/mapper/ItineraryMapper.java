@@ -9,12 +9,13 @@ import com.tripflow.itinerary_service.model.ItineraryStop;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class ItineraryMapper {
 
     //Converte un DTO di richiesta (CreateItineraryRequest)in una Entity Itinerary pronta per il db
-    public Itinerary toEntity(CreateItineraryRequest request, Long ownerId) {
+    public Itinerary toEntity(CreateItineraryRequest request, UUID ownerId) {
 
         Itinerary itinerary = new Itinerary();
 

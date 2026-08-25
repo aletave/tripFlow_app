@@ -1,0 +1,2 @@
+CREATE DATABASE tripflow_review_db OWNER tripflow_user;
+CREATE DATABASE tripflow_booking_db OWNER tripflow_user;

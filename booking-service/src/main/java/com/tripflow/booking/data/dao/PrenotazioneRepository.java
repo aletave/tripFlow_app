@@ -20,26 +20,25 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
         JpaSpecificationExecutor<Prenotazione> {
 
 
-    // "Le mie prenotazioni" — ordinate dalla più recente
+    //"Le mie prenotazioni" — ordinate dalla più recente
     @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggiatoreIdOrderByDataPrenotazioneDesc(UUID viaggiatoreId);
 
-    // "Le mie prenotazioni attive" — filtrate per stati (es. IN_ATTESA + CONFERMATA)
+    //"Le mie prenotazioni attive" — filtrate per stati
     @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggiatoreIdAndStatoIn(UUID viaggiatoreId,
                                                      Collection<StatoPrenotazione> stati);
 
-    // "Prenotazioni ricevute per il mio viaggio" — vista organizzatore
+    //"Prenotazioni ricevute per il mio viaggio" — organizzatore
     @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findByViaggioId(UUID viaggioId);
 
-    // Ricerca dinamica: ridichiarare findAll(Specification) permette di
-    // agganciare l'@EntityGraph anche alle query da Specification
+    //ricerca dinamica specification
     @Override
     @EntityGraph(attributePaths = {"attivitaSelezionate", "pagamento"})
     List<Prenotazione> findAll(Specification<Prenotazione> spec);
 
-    // Tutte le prenotazioni in un certo stato
+    //Tutte le prenotazioni in un certo stato
     List<Prenotazione> findByStato(StatoPrenotazione stato);
 
     List<Prenotazione> findByViaggiatoreIdAndViaggioIdAndStatoIn(
@@ -47,9 +46,8 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
 
 
 
-    // QUERY JPQL CUSTOM
+    //QUERY JPQL CUSTOM
 
-    //carica prenotazione + attività in una sola query (evita N+1)
     @Query("""
            SELECT DISTINCT p FROM Prenotazione p
            LEFT JOIN FETCH p.attivitaSelezionate
@@ -57,7 +55,6 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
            """)
     Optional<Prenotazione> trovaConAttivita(@Param("id") UUID id);
 
-    //somma dei partecipanti per un viaggio (esclude le annullate)
     @Query("""
            SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
            WHERE p.viaggioId = :viaggioId

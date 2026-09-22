@@ -4,6 +4,8 @@ import com.tripflow.booking.data.dto.requests.PrenotazioneAttivitaRequest;
 import com.tripflow.booking.data.dto.requests.PrenotazioneRequest;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
 import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
+import com.tripflow.booking.configSecurity.UtenteAutenticato;
+
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -27,9 +29,6 @@ public interface PrenotazioneService {
                                           UUID viaggiatoreId,
                                           PrenotazioneAttivitaRequest request);
 
-     //Rimuove un'attività da una prenotazione esistente.
-     // Ricalcola il prezzo totale.
-     //stesse regole di aggiungiAttivita.
     PrenotazioneResponse rimuoviAttivita(UUID prenotazioneId,
                                          UUID viaggiatoreId,
                                          UUID attivitaId);
@@ -43,8 +42,8 @@ public interface PrenotazioneService {
 
 
     //Ricerca dinamica con filtri opzionali(specification).
-
-    List<PrenotazioneResponse> ricerca(UUID viaggiatoreId,
+    List<PrenotazioneResponse> ricerca(UtenteAutenticato utente,
+                                       UUID viaggiatoreId,
                                        UUID viaggioId,
                                        StatoPrenotazione stato,
                                        LocalDateTime da,

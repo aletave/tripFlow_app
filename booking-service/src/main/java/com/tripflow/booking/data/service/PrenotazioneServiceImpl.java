@@ -3,6 +3,7 @@ package com.tripflow.booking.data.service;
 import com.tripflow.booking.client.CatalogClient;
 import com.tripflow.booking.client.dto.ActivityResponseDTO;
 import com.tripflow.booking.client.dto.TripResponseDTO;
+import com.tripflow.booking.configSecurity.UtenteAutenticato;
 import com.tripflow.booking.data.dao.PrenotazioneRepository;
 import com.tripflow.booking.data.dao.PrenotazioneAttivitaRepository;
 import com.tripflow.booking.data.dao.PrenotazioneSpecification;
@@ -40,6 +41,9 @@ import java.util.UUID;
 @Slf4j
 @Transactional
 public class PrenotazioneServiceImpl implements PrenotazioneService {
+
+    private static final String ORGANIZER = "ORGANIZER";
+
 
     private final PrenotazioneRepository prenotazioneRepository;
     private final PrenotazioneAttivitaRepository attivitaRepository;
@@ -315,7 +319,8 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<PrenotazioneResponse> ricerca(UUID viaggiatoreId,
+    public List<PrenotazioneResponse> ricerca(UtenteAutenticato utente,
+                                              UUID viaggiatoreId,
                                               UUID viaggioId,
                                               StatoPrenotazione stato,
                                               LocalDateTime da,
@@ -323,26 +328,50 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                                               BigDecimal prezzoMin,
                                               BigDecimal prezzoMax) {
 
+        boolean isOrganizer = ORGANIZER.equals(utente.ruolo());
 
-        Specification<Prenotazione> spec = Specification.allOf(
-                PrenotazioneSpecification.viaggiatoreEquals(viaggiatoreId),
-                PrenotazioneSpecification.viaggioEquals(viaggioId),
+        Specification<Prenotazione> scope;
+
+        if (isOrganizer) {
+            scope = scopeOrganizzatore(utente.id(), viaggioId);
+        } else {
+            scope = PrenotazioneSpecification.viaggiatoreEquals(utente.id());
+        }
+
+        UUID idViaggiatore;
+        UUID idViaggio;
+
+        if (isOrganizer) {
+            idViaggiatore = viaggiatoreId;
+            idViaggio = null;
+        } else {
+            idViaggiatore = null;
+            idViaggio = viaggioId;
+        }
+
+        Specification<Prenotazione> filtri = Specification.allOf(
+                // un viaggiatore non può filtrare su altri viaggiatori
+                PrenotazioneSpecification.viaggiatoreEquals(idViaggiatore),
+                PrenotazioneSpecification.viaggioEquals(idViaggio),
                 PrenotazioneSpecification.hasStato(stato),
                 PrenotazioneSpecification.prenotataTra(da, a),
                 PrenotazioneSpecification.prezzoMaggioreDi(prezzoMin),
                 PrenotazioneSpecification.prezzoMinoreDi(prezzoMax)
         );
 
-        List<Prenotazione> risultati = prenotazioneRepository.findAll(spec);
+        List<Prenotazione> risultati =
+                prenotazioneRepository.findAll(Specification.allOf(scope, filtri));
 
-        log.debug("Ricerca prenotazioni: trovate {} con filtri " +
+        log.debug("Ricerca prenotazioni: utente={} ruolo={} -> {} risultati " +
                         "[viaggiatore={}, viaggio={}, stato={}, da={}, a={}, prezzoMin={}, prezzoMax={}]",
-                risultati.size(), viaggiatoreId, viaggioId, stato, da, a, prezzoMin, prezzoMax);
+                utente.id(), utente.ruolo(), risultati.size(),
+                viaggiatoreId, viaggioId, stato, da, a, prezzoMin, prezzoMax);
 
         return risultati.stream()
                 .map(PrenotazioneMapper::toResponse)
                 .toList();
     }
+
 
     @Override
     public PrenotazioneResponse confermaPrenotazione(UUID prenotazioneId) {
@@ -431,14 +460,51 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         }
     }
 
+    //organizzatore, solo le prenotazioni dei viaggi che organizza lui.
+    private Specification<Prenotazione> scopeOrganizzatore(UUID organizzatoreId, UUID viaggioId) {
+
+        if (viaggioId != null) {
+            TripResponseDTO viaggio = recuperaViaggio(viaggioId);
+            if (!organizzatoreId.equals(viaggio.getOrganizerId())) {
+                log.warn("Ricerca negata su viaggio {}: richiesta da {}, organizzatore reale {}",
+                        viaggioId, organizzatoreId, viaggio.getOrganizerId());
+                throw new AccessDeniedException("Viaggio non gestito da questo organizzatore");
+            }
+            return PrenotazioneSpecification.viaggioEquals(viaggioId);
+        }
+
+        List<UUID> suoiViaggi = recuperaViaggiDiOrganizzatore(organizzatoreId).stream()
+                .map(TripResponseDTO::getId)
+                .toList();
+
+        return PrenotazioneSpecification.viaggioIdIn(suoiViaggi);
+    }
+
+    private List<TripResponseDTO> recuperaViaggiDiOrganizzatore(UUID organizzatoreId) {
+        try {
+            return catalogClient.getTripsByOrganizer(organizzatoreId);
+        } catch (FeignException e) {
+            log.error("Errore comunicazione con catalog-service per i viaggi dell'organizzatore {}",
+                    organizzatoreId, e);
+            throw new BookingException("Errore comunicazione con catalog-service");
+        }
+    }
+
+
     private List<ActivityResponseDTO> filtraAttivitaRichieste(TripResponseDTO viaggio,
                                                               List<UUID> attivitaIds) {
         if (attivitaIds == null || attivitaIds.isEmpty()) {
             return List.of();
         }
-        List<ActivityResponseDTO> tutte = viaggio.getActivities() != null
-                ? viaggio.getActivities()
-                : List.of();
+
+        List<ActivityResponseDTO> tutte;
+        if (viaggio.getActivities() != null) {
+            tutte = viaggio.getActivities();
+        }
+        else{
+            tutte = List.of();
+        }
+
 
         List<ActivityResponseDTO> selezionate = new ArrayList<>();
         for (UUID id : attivitaIds) {

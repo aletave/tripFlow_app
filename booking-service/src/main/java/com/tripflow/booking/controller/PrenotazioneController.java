@@ -1,7 +1,6 @@
 package com.tripflow.booking.controller;
 
 import com.tripflow.booking.configSecurity.SecurityUtils;
-import com.tripflow.booking.configSecurity.UtenteAutenticato;
 import com.tripflow.booking.data.dto.requests.PrenotazioneAttivitaRequest;
 import com.tripflow.booking.data.dto.requests.PrenotazioneRequest;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
@@ -58,14 +57,12 @@ public class PrenotazioneController {
         return prenotazioneService.trovaMiePrenotazioniAttive(SecurityUtils.viaggiatoreId());
     }
 
-    //Transizione di stato: la prenotazione non viene cancellata
     @PatchMapping("/{id}/annulla")
     public PrenotazioneResponse annulla(@PathVariable UUID id) {
         return prenotazioneService.annullaPrenotazione(id, SecurityUtils.viaggiatoreId());
     }
 
 
-    // Gestione attività (su prenotazione esistente)
 
     @PostMapping("/{id}/attivita")
     @ResponseStatus(HttpStatus.CREATED)
@@ -86,8 +83,6 @@ public class PrenotazioneController {
     // Organizzatore
     //Tutte le prenotazioni ricevute per un viaggio.
 
-    //Solo un ORGANIZER può chiamarlo. che il viaggio sia proprio suo
-    //lo verifica il service interrogando il catalog
     @PreAuthorize("hasRole('ORGANIZER')")
     @GetMapping("/viaggio/{viaggioId}")
     public List<PrenotazioneResponse> perViaggio(@PathVariable UUID viaggioId) {
@@ -110,11 +105,9 @@ public class PrenotazioneController {
             @RequestParam(required = false) BigDecimal prezzoMax) {
 
 
-        UtenteAutenticato utente = SecurityUtils.utenteCorrente();
-        if (!"ORGANIZER".equals(utente.ruolo())) {
-            viaggiatoreId = utente.id();
-        }
+        return prenotazioneService.ricerca(
+                SecurityUtils.utenteCorrente(),
+                viaggiatoreId, viaggioId, stato, da, a, prezzoMin, prezzoMax);
 
-        return prenotazioneService.ricerca(viaggiatoreId, viaggioId, stato, da, a, prezzoMin, prezzoMax);
     }
 }

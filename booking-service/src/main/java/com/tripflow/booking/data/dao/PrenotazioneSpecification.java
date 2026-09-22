@@ -8,6 +8,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import java.util.Collection;
+
 
 public final class PrenotazioneSpecification {
 
@@ -24,6 +26,17 @@ public final class PrenotazioneSpecification {
         if (viaggioId == null) return null;
         return (root, query, cb) -> cb.equal(root.get("viaggioId"), viaggioId);
     }
+
+    public static Specification<Prenotazione> viaggioIdIn(Collection<UUID> viaggioIds) {
+        if (viaggioIds == null) {
+            return null;
+        }
+        if (viaggioIds.isEmpty()) {
+            return (root, query, cb) -> cb.disjunction();
+        }
+        return (root, query, cb) -> root.get("viaggioId").in(viaggioIds);
+    }
+
 
     public static Specification<Prenotazione> hasStato(StatoPrenotazione stato) {
         if (stato == null) return null;

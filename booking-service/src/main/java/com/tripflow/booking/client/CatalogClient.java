@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
+import java.util.List;
 
 //client catalog-service
 @FeignClient(name = "catalog-service")
@@ -17,4 +18,7 @@ public interface CatalogClient {
 
     @GetMapping("/api/v1/activities/{id}")
     ActivityResponseDTO getActivity(@PathVariable("id") UUID id);
+
+    @GetMapping("/api/v1/trips/organizer/{organizerId}")
+    List<TripResponseDTO> getTripsByOrganizer(@PathVariable("organizerId") UUID organizerId);
 }

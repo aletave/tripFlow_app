@@ -26,11 +26,10 @@ import com.tripflow.booking.exception.StatoPrenotazioneException;
 import com.tripflow.booking.exception.StatoPagamentoException;
 import org.springframework.security.access.AccessDeniedException;
 
+
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
-
-// Implementazione di PagamentoService
 
 
 @Service
@@ -49,26 +48,22 @@ public class PagamentoServiceImpl implements PagamentoService {
     public PagamentoIntentResponse avviaPagamento(UUID prenotazioneId,
                                                   UUID viaggiatoreId) {
 
-        // 1. Carico la prenotazione
         Prenotazione prenotazione = prenotazioneRepository.findById(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        // 2. Check ownership
         if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
             log.warn("Avvio pagamento negato: prenotazione {} richiesta da {}, appartiene a {}",
                     prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
             throw new AccessDeniedException("Prenotazione non accessibile");
         }
 
-        // 3. Check stato prenotazione
+
         if (prenotazione.getStato() != StatoPrenotazione.IN_ATTESA) {
             throw new StatoPrenotazioneException(
                     "Impossibile avviare pagamento: prenotazione in stato " + prenotazione.getStato());
         }
 
-        // 4. Check pagamento già esistente.
-        //    Se è FALLITO il viaggiatore può ritentare (si riusa la stessa riga,
-        //    UNIQUE su prenotazione_id); in ogni altro stato è un duplicato.
+
         Optional<Pagamento> trova_esistente = pagamentoRepository.findByPrenotazioneId(prenotazioneId);
         if (trova_esistente.isPresent()
                 && trova_esistente.get().getStato() != StatoPagamento.FALLITO) {
@@ -76,15 +71,13 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Pagamento già esistente per la prenotazione " + prenotazioneId);
         }
 
-        // 5. Crea il PaymentIntent VERO su Stripe.
-        //    L'importo è SEMPRE il prezzoTotale della prenotazione, mai dal client.
+
         PaymentIntent paymentIntent =
                 stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
 
-        // 6. Ppagamento con l'id reale del PaymentIntent.
+
         Pagamento pagamento;
         if (trova_esistente.isPresent()) {
-            // Retry dopo FALLITO: nuovo PaymentIntent sulla stessa riga.
             pagamento = trova_esistente.get();
             pagamento.setStato(StatoPagamento.IN_ATTESA);
             pagamento.setImporto(prenotazione.getPrezzoTotale());
@@ -105,7 +98,6 @@ public class PagamentoServiceImpl implements PagamentoService {
         log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, paymentIntent={}",
                 saved.getId(), prenotazioneId, saved.getImporto(), paymentIntent.getId());
 
-        // 7. Restituisco il client_secret all'app Android per la PaymentSheet.
         return PagamentoIntentResponse.builder()
                 .pagamentoId(saved.getId())
                 .clientSecret(paymentIntent.getClientSecret())

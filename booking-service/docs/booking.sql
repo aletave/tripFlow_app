@@ -1,6 +1,5 @@
--- =============================================
--- BOOKING SERVICE DATABASE
--- =============================================
+
+-- BOOKING SERVICE DB
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -27,71 +26,68 @@ CREATE TYPE metodo_pagamento AS ENUM (
 
 
 CREATE TABLE prenotazione (
-                              id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- Riferimenti cross-service (no FK)
-                              viaggiatore_id              UUID NOT NULL,
-                              viaggio_id                  UUID NOT NULL,
+    viaggiatore_id UUID NOT NULL,
+    viaggio_id UUID NOT NULL,
 
-    -- Snapshot dati viaggio
-                              viaggio_titolo_snap         VARCHAR(255) NOT NULL,
-                              viaggio_destinazione_snap   VARCHAR(255) NOT NULL,
-                              viaggio_data_inizio_snap    DATE NOT NULL,
-                              viaggio_data_fine_snap      DATE NOT NULL,
-                              viaggio_prezzo_snap         NUMERIC(10,2) NOT NULL,
+    -- i dati viaggio sono snap, congelati
+    viaggio_titolo_snap  VARCHAR(255) NOT NULL,
+    viaggio_destinazione_snap  VARCHAR(255) NOT NULL,
+    viaggio_data_inizio_snap  DATE NOT NULL,
+    viaggio_data_fine_snap  DATE NOT NULL,
+    viaggio_prezzo_snap  NUMERIC(10,2) NOT NULL,
 
-    -- Dati prenotazione
-                              numero_partecipanti         INTEGER NOT NULL DEFAULT 1,
-                              prezzo_totale               NUMERIC(10,2) NOT NULL,
-                              stato                       stato_prenotazione NOT NULL DEFAULT 'IN_ATTESA',
-                              data_prenotazione           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                              note                        TEXT,
+    numero_partecipanti INTEGER NOT NULL DEFAULT 1,
+    prezzo_totale NUMERIC(10,2) NOT NULL,
+    stato stato_prenotazione NOT NULL DEFAULT 'IN_ATTESA',
+    data_prenotazione TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    note TEXT,
 
-    -- Audit
-                              created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                              updated_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                              CONSTRAINT chk_partecipanti CHECK (numero_partecipanti > 0),
-                              CONSTRAINT chk_prezzo_totale CHECK (prezzo_totale >= 0)
+    CONSTRAINT chk_partecipanti CHECK (numero_partecipanti > 0),
+    CONSTRAINT chk_prezzo_totale CHECK (prezzo_totale >= 0)
 );
 
 
 CREATE TABLE prenotazione_attivita (
-                                       id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                                       prenotazione_id UUID NOT NULL REFERENCES prenotazione(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prenotazione_id UUID NOT NULL REFERENCES prenotazione(id) ON DELETE CASCADE,
 
-                                       attivita_id     UUID NOT NULL,
+    attivita_id UUID NOT NULL,
 
-    -- Snapshot dati attività
-                                       attivita_nome_snap      VARCHAR(255) NOT NULL,
-                                       attivita_prezzo_snap    NUMERIC(10,2) NOT NULL,
-                                       attivita_durata_snap    INTEGER NOT NULL,
+    -- dati attività sempre snap
+    attivita_nome_snap VARCHAR(255) NOT NULL,
+    attivita_prezzo_snap NUMERIC(10,2) NOT NULL,
+    attivita_durata_snap INTEGER NOT NULL,
 
-                                       created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                                       CONSTRAINT uq_prenotazione_attivita UNIQUE (prenotazione_id, attivita_id)
+    CONSTRAINT uq_prenotazione_attivita UNIQUE (prenotazione_id, attivita_id)
 );
 
 
 CREATE TABLE pagamento (
-                           id                          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                           prenotazione_id             UUID NOT NULL UNIQUE REFERENCES prenotazione(id),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    prenotazione_id UUID NOT NULL UNIQUE REFERENCES prenotazione(id),
 
-                           importo                     NUMERIC(10,2) NOT NULL,
-                           metodo                      metodo_pagamento NOT NULL,
-                           stato                       stato_pagamento NOT NULL DEFAULT 'IN_ATTESA',
+    importo NUMERIC(10,2) NOT NULL,
+    metodo metodo_pagamento NOT NULL,
+    stato stato_pagamento NOT NULL DEFAULT 'IN_ATTESA',
 
-    -- Riferimenti Stripe
-                           stripe_payment_intent_id    VARCHAR(100) UNIQUE,
-                           ultime_quattro_cifre        VARCHAR(4),
-                           brand_carta                 VARCHAR(20),
+    -- riferimenti per Stripe
+    stripe_payment_intent_id VARCHAR(100) UNIQUE,
+    ultime_quattro_cifre VARCHAR(4),
+    brand_carta VARCHAR(20),
 
-                           data_pagamento              TIMESTAMP,
+    data_pagamento TIMESTAMP,
 
-                           created_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                           updated_at                  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                           CONSTRAINT chk_importo CHECK (importo > 0)
+    CONSTRAINT chk_importo CHECK (importo > 0)
 );
 
 

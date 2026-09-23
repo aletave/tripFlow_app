@@ -36,12 +36,12 @@ public interface PrenotazioneService {
 
 
     // per l'organizzatore
-    //Tutte le prenotazioni ricevute per un viaggio.
-    //Pensata per l'organizzatore che vuole vedere i partecipanti al suo viaggio.
+    //Tutte le prenotazioni ricevute per un viaggio
+    //Pensata per l'organizzatore che vuole vedere i partecipanti al suo viaggio
     List<PrenotazioneResponse> trovaPrenotazioniPerViaggio(UUID viaggioId, UUID organizzatoreId);
 
 
-    //Ricerca dinamica con filtri opzionali(specification).
+    //Ricerca dinamica con filtri opzionali(specification)
     List<PrenotazioneResponse> ricerca(UtenteAutenticato utente,
                                        UUID viaggiatoreId,
                                        UUID viaggioId,
@@ -56,4 +56,7 @@ public interface PrenotazioneService {
     PrenotazioneResponse confermaPrenotazione(UUID prenotazioneId);
 
     int completaPrenotazioniScadute();
+
+    int scadutePrenotazioniNonPagate();
+
 }

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.dao.OptimisticLockingFailureException;
 
 
 import java.util.Date;
@@ -58,11 +59,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onTypeMismatch(WebRequest req, MethodArgumentTypeMismatchException ex) {
-        String tipoAtteso = ex.getRequiredType() != null
-                ? ex.getRequiredType().getSimpleName()
-                : "valore valido";
-        String message = "Parametro '" + ex.getName() + "' non valido: atteso un " + tipoAtteso;
+    public ServiceError onTypeMismatch(
+            WebRequest req,
+            MethodArgumentTypeMismatchException ex) {
+        String tipoAtteso;
+        if (ex.getRequiredType() != null) {
+            tipoAtteso = ex.getRequiredType().getSimpleName();
+        } else {
+            tipoAtteso = "valore valido";
+        }
+        String message = "Parametro '" + ex.getName()
+                + "' non valido: atteso un " + tipoAtteso;
         return errorResponse(req, message);
     }
 
@@ -71,6 +78,14 @@ public class GlobalExceptionHandler {
     public ServiceError onMissingHeader(WebRequest req, MissingRequestHeaderException ex) {
         String message = "Header obbligatorio mancante: " + ex.getHeaderName();
         return errorResponse(req, message);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ServiceError onConflittoDiConcorrenza(WebRequest req, OptimisticLockingFailureException ex) {
+        log.warn("Conflitto di concorrenza, la risorsa e' stata modificata da un'altra operazione", ex);
+        return errorResponse(req,
+                "La prenotazione e' stata modificata da un'altra operazione. Ricarica e riprova.");
     }
 
 

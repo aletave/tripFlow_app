@@ -4,7 +4,10 @@ import com.tripflow.booking.data.dto.responses.PrenotazioneAttivitaResponse;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
 import com.tripflow.booking.data.entities.Prenotazione;
 import com.tripflow.booking.data.entities.PrenotazioneAttivita;
+import com.tripflow.booking.data.entities.enums.StatoPrenotazione;
 
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.List;
 
 public final class PrenotazioneMapper {
@@ -34,11 +37,22 @@ public final class PrenotazioneMapper {
                 .prezzoTotale(p.getPrezzoTotale())
                 .stato(p.getStato())
                 .dataPrenotazione(p.getDataPrenotazione())
+                .scadenzaIl(p.getScadenzaIl())
+                .secondiAllaScadenza(secondiAllaScadenza(p))
                 .note(p.getNote())
                 .attivitaSelezionate(attivita)
                 .infoPagamento(PagamentoMapper.toResponse(p.getPagamento()))
                 .createdAt(p.getCreatedAt())
                 .build();
+    }
+
+
+    private static Long secondiAllaScadenza(Prenotazione p) {
+        if (p.getStato() != StatoPrenotazione.IN_ATTESA || p.getScadenzaIl() == null) {
+            return null;
+        }
+        long secondi = Duration.between(LocalDateTime.now(), p.getScadenzaIl()).toSeconds();
+        return Math.max(secondi, 0);
     }
 
     public static PrenotazioneAttivitaResponse toAttivitaResponse(PrenotazioneAttivita a) {

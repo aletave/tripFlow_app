@@ -19,6 +19,7 @@ import com.tripflow.booking.exception.BookingException;
 import com.tripflow.booking.exception.PrenotazioneNotFoundException;
 import com.tripflow.booking.exception.StatoPrenotazioneException;
 import com.tripflow.booking.mapper.PrenotazioneMapper;
+import com.tripflow.booking.config.PrenotazioneProperties;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,11 +44,13 @@ import java.util.UUID;
 public class PrenotazioneServiceImpl implements PrenotazioneService {
 
     private static final String ORGANIZER = "ORGANIZER";
-
+    private static final long LOCK_JOB_SCADENZE = 810_001L;
+    private static final long LOCK_JOB_COMPLETAMENTI = 810_002L;
 
     private final PrenotazioneRepository prenotazioneRepository;
     private final PrenotazioneAttivitaRepository attivitaRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final PrenotazioneProperties prenotazioneProperties;
     private final CatalogClient catalogClient;
 
 
@@ -57,25 +60,31 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         log.info("Creazione prenotazione: viaggiatore={}, viaggio={}, partecipanti={}",
                 viaggiatoreId, request.getViaggioId(), request.getNumeroPartecipanti());
 
-        //Recupero dati dal catalog
         TripResponseDTO viaggio = recuperaViaggio(request.getViaggioId());
+
+
+        LocalDateTime adesso = LocalDateTime.now();
 
         prenotazioneRepository.bloccaViaggio(request.getViaggioId().toString());
 
-        Integer giaPrenotati = prenotazioneRepository.sommaPartecipantiPerViaggio(request.getViaggioId());
+        int trattenuti = prenotazioneRepository.sommaPostiTrattenuti(
+                request.getViaggioId(), adesso);
         int richiesti = request.getNumeroPartecipanti();
-        if (giaPrenotati + richiesti > viaggio.getAvailableSpots()) {
+        int disponibili = viaggio.getAvailableSpots() - trattenuti;
+
+        if (richiesti > disponibili) {
             throw new BookingException(
                     "Posti insufficienti per il viaggio " + request.getViaggioId() +
-                            ": disponibili " + (viaggio.getAvailableSpots() - giaPrenotati) +
+                            ": disponibili " + disponibili +
                             ", richiesti " + richiesti);
         }
 
-        //Filtra le attività richieste dalla lista già restituita dal catalog.
+
+        //Filtra le attività richieste dalla lista già restituita dal catalog
         List<ActivityResponseDTO> attivitaRichieste = filtraAttivitaRichieste(
                 viaggio, request.getAttivitaIds());
 
-        // Check disponibilità posti per ogni attività richiesta.
+        //check disponibilità posti per ogni attività richiesta
         //TODO: in futuro confrontare con la somma dei partecipanti già
         // prenotati per quella specifica attività.
         for (ActivityResponseDTO att : attivitaRichieste) {
@@ -87,7 +96,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
             }
         }
 
-        //Costruzione entity Prenotazione con snapshot dati dal catalog.
         Prenotazione prenotazione = Prenotazione.builder()
                 .viaggiatoreId(viaggiatoreId)
                 .viaggioId(viaggio.getId())
@@ -98,12 +106,12 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                 .viaggioPrezzoSnap(viaggio.getPrice())
                 .numeroPartecipanti(richiesti)
                 .stato(StatoPrenotazione.IN_ATTESA)
-                .dataPrenotazione(LocalDateTime.now())
+                .dataPrenotazione(adesso)
+                .scadenzaIl(adesso.plus(prenotazioneProperties.ttl()))
                 .note(request.getNote())
-                .prezzoTotale(BigDecimal.ZERO) // placeholder, ricalcolato sotto
+                .prezzoTotale(BigDecimal.ZERO) //placeholder, ricalcolato sotto
                 .build();
 
-        //Snapshot attività dai dati reali del catalog.
         for (ActivityResponseDTO att : attivitaRichieste) {
             PrenotazioneAttivita pa = PrenotazioneAttivita.builder()
                     .attivitaId(att.getId())
@@ -117,8 +125,8 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         prenotazione.ricalcolaPrezzoTotale();
         Prenotazione saved = prenotazioneRepository.save(prenotazione);
 
-        log.info("Prenotazione creata: id={}, prezzoTotale={}, attivita={}",
-                saved.getId(), saved.getPrezzoTotale(), saved.getAttivitaSelezionate().size());
+        log.info("Prenotazione creata: id={}, prezzoTotale={}, attivita={}, scade il {}",
+                saved.getId(), saved.getPrezzoTotale(), saved.getAttivitaSelezionate().size(), saved.getScadenzaIl());
 
         return PrenotazioneMapper.toResponse(saved);
     }
@@ -184,11 +192,10 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
     @Override
     public PrenotazioneResponse annullaPrenotazione(UUID prenotazioneId, UUID viaggiatoreId) {
 
-        //Carico
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        //Check ownership
+        //check ownership
         if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
             log.warn("Annullamento negato su prenotazione {}: richiesto da {}, appartiene a {}",
                     prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
@@ -242,7 +249,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                     "Attività " + attivitaId + " già presente nella prenotazione");
         }
 
-        //Chiamo il catalog per i dati reali dell'attività.
         ActivityResponseDTO att = recuperaAttivita(attivitaId);
 
 
@@ -282,24 +288,20 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                                                 UUID viaggiatoreId,
                                                 UUID attivitaId) {
 
-        //Carico con attività
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        //Check ownership
         if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
             log.warn("Modifica negata su prenotazione {}: richiesto da {}, appartiene a {}",
                     prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
             throw new AccessDeniedException("Prenotazione non accessibile");
         }
 
-        //Check stato
         if (prenotazione.getStato() != StatoPrenotazione.IN_ATTESA) {
             throw new StatoPrenotazioneException(
                     "Impossibile rimuovere attività: prenotazione in stato " + prenotazione.getStato());
         }
 
-        //Trovo l'attività da rimuovere nella collezione
         PrenotazioneAttivita daRimuovere = prenotazione.getAttivitaSelezionate().stream()
                 .filter(a -> a.getAttivitaId().equals(attivitaId))
                 .findFirst()
@@ -350,7 +352,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         }
 
         Specification<Prenotazione> filtri = Specification.allOf(
-                // un viaggiatore non può filtrare su altri viaggiatori
+                //un viaggiatore non può filtrare su altri viaggiatori
                 PrenotazioneSpecification.viaggiatoreEquals(idViaggiatore),
                 PrenotazioneSpecification.viaggioEquals(idViaggio),
                 PrenotazioneSpecification.hasStato(stato),
@@ -412,6 +414,11 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
     @Scheduled(cron = "0 0 3 * * *")
     public int completaPrenotazioniScadute() {
 
+        if (!Boolean.TRUE.equals(prenotazioneRepository.provaAcquisireLockJob(LOCK_JOB_COMPLETAMENTI))) {
+            log.debug("Job completamenti gia' in esecuzione altrove, salto il giro");
+            return 0;
+        }
+
         List<Prenotazione> daCompletare = prenotazioneRepository.trovaDaCompletare();
 
         if (daCompletare.isEmpty()) {
@@ -430,6 +437,33 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         return daCompletare.size();
     }
 
+    @Override
+    @Scheduled(fixedDelayString = "${booking.prenotazione.frequenza-pulizia:PT1M}")
+    public int scadutePrenotazioniNonPagate() {
+
+        if (!Boolean.TRUE.equals(prenotazioneRepository.provaAcquisireLockJob(LOCK_JOB_SCADENZE))) {
+            log.debug("Job scadenze gia' in esecuzione altrove, salto il giro");
+            return 0;
+        }
+
+        List<Prenotazione> scaduti = prenotazioneRepository.trovaHoldScaduti(LocalDateTime.now());
+
+        if (scaduti.isEmpty()) {
+            return 0;
+        }
+
+        for (Prenotazione p : scaduti) {
+            p.setStato(StatoPrenotazione.SCADUTA);
+            log.info("Prenotazione {} scaduta: creata il {}, scadeva il {}",
+                    p.getId(), p.getDataPrenotazione(), p.getScadenzaIl());
+        }
+
+        prenotazioneRepository.saveAll(scaduti);
+
+        log.info("Scadute {} prenotazioni non pagate", scaduti.size());
+
+        return scaduti.size();
+    }
 
 
     //helper privati integrazione catalog
@@ -460,7 +494,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         }
     }
 
-    //organizzatore, solo le prenotazioni dei viaggi che organizza lui.
+    //organizzatore, solo le prenotazioni dei viaggi che organizza lui
     private Specification<Prenotazione> scopeOrganizzatore(UUID organizzatoreId, UUID viaggioId) {
 
         if (viaggioId != null) {

@@ -63,6 +63,12 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Impossibile avviare pagamento: prenotazione in stato " + prenotazione.getStato());
         }
 
+        if (prenotazione.isScadutaAl(LocalDateTime.now())) {
+            throw new StatoPrenotazioneException(
+                    "Impossibile avviare pagamento: la prenotazione " + prenotazioneId +
+                            " e' scaduta il " + prenotazione.getScadenzaIl());
+        }
+
 
         Optional<Pagamento> trova_esistente = pagamentoRepository.findByPrenotazioneId(prenotazioneId);
         if (trova_esistente.isPresent()
@@ -132,7 +138,7 @@ public class PagamentoServiceImpl implements PagamentoService {
 
         StatoPagamento statoAttuale = pagamento.getStato();
 
-        // check webhook duplicati.
+        // check webhook duplicati
         if (statoAttuale == StatoPagamento.COMPLETATO) {
             log.info("Pagamento {} già COMPLETATO, ignoro la conferma duplicata", pagamento.getId());
             return PagamentoMapper.toResponse(pagamento);
@@ -190,13 +196,13 @@ public class PagamentoServiceImpl implements PagamentoService {
                 .orElseThrow(() -> new PagamentoNotFoundException(
                         "Nessun pagamento trovato per la prenotazione " + prenotazioneId));
 
-        // Solo i pagamenti completati possono essere rimborsati.
+        //Solo i pagamenti completati possono essere rimborsati
         if (pagamento.getStato() != StatoPagamento.COMPLETATO) {
             throw new StatoPagamentoException(
                     "Impossibile rimborsare: pagamento in stato " + pagamento.getStato());
         }
 
-        //Rimborso  solo a livello applicativo: non chiamo Stripe per questo.
+        //Rimborso  solo a livello applicativo: non chiamo Stripe per questo
         pagamento.setStato(StatoPagamento.RIMBORSATO);
         Pagamento saved = pagamentoRepository.save(pagamento);
 
@@ -205,7 +211,7 @@ public class PagamentoServiceImpl implements PagamentoService {
         return PagamentoMapper.toResponse(saved);
     }
 
-    //Listener degli eventi di annullamento prenotazione.
+    //Listener degli eventi di annullamento prenotazione
     @EventListener
     public void onPrenotazioneAnnullata(PrenotazioneAnnullataEvent event) {
         if (!event.eraConfermata()) {

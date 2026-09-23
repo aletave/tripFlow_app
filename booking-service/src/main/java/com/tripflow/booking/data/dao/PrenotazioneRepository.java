@@ -14,6 +14,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Repository
 public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID>,
@@ -56,11 +57,14 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
     Optional<Prenotazione> trovaConAttivita(@Param("id") UUID id);
 
     @Query("""
-           SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
-           WHERE p.viaggioId = :viaggioId
-             AND p.stato <> com.tripflow.booking.data.entities.enums.StatoPrenotazione.ANNULLATA
-           """)
-    Integer sommaPartecipantiPerViaggio(@Param("viaggioId") UUID viaggioId);
+             SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
+             WHERE p.viaggioId = :viaggioId
+               AND p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.IN_ATTESA
+               AND p.scadenzaIl > :adesso
+             """)
+    Integer sommaPostiTrattenuti(@Param("viaggioId") UUID viaggioId,
+                                 @Param("adesso") LocalDateTime adesso);
+
 
 
     @Query("""
@@ -70,6 +74,13 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
            """)
     List<Prenotazione> trovaDaCompletare();
 
+    @Query("""
+             SELECT p FROM Prenotazione p
+             WHERE p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.IN_ATTESA
+               AND p.scadenzaIl < :adesso
+             """)
+    List<Prenotazione> trovaHoldScaduti(@Param("adesso") LocalDateTime adesso);
+
     //evita race condition sullo stesso viaggio
     @Query(value = """
            SELECT COUNT(*) FROM (
@@ -77,4 +88,8 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
            ) AS lock_acquisito
            """, nativeQuery = true)
     Long bloccaViaggio(@Param("viaggioId") String viaggioId);
+
+    @Query(value = "SELECT pg_try_advisory_xact_lock(:chiave)", nativeQuery = true)
+    Boolean provaAcquisireLockJob(@Param("chiave") long chiave);
+
 }

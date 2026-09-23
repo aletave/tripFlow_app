@@ -34,6 +34,13 @@ public class PrenotazioneResponse {
     private BigDecimal prezzoTotale;
     private StatoPrenotazione stato;
     private LocalDateTime dataPrenotazione;
+    private LocalDateTime scadenzaIl;
+
+    //Secondi mancanti alla scadenza, calcolati dal server: il client conta
+    //alla rovescia da questo numero senza dover interpretare fusi orari.
+    //Null quando non c'e' un hold attivo da mostrare.
+    private Long secondiAllaScadenza;
+
     private String note;
 
     //Dettagli relazioni

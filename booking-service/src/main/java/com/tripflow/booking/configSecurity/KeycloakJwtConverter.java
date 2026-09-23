@@ -13,12 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-//Traduce il JWT di Keycloak nell'Authentication usata dal resto del servizio.
-//Il principal resta UtenteAutenticato (come con il vecchio filtro fatto a mano):
-//cosi' SecurityUtils, i controller e i service non cambiano.
-//  - id    = "sub" del token (in Keycloak èl'UUID dell'utente)
-//  - nome  = claim "nome" (protocol mapper full-name sul client tripflow-app)
-//  - ruolo = TRAVELER / ORGANIZER, letti da realm_access.roles
+
 @Component
 public class KeycloakJwtConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 

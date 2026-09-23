@@ -26,14 +26,12 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class PrenotazioneAttivita {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
 
-    //relazione con Prenotazione (lato padrone)
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "prenotazione_id", nullable = false)
     private Prenotazione prenotazione;
@@ -43,7 +41,6 @@ public class PrenotazioneAttivita {
     private UUID attivitaId;
 
 
-    // dati attività
     @Column(name = "attivita_nome_snap", nullable = false, length = 255)
     private String attivitaNomeSnap;
 
@@ -53,9 +50,6 @@ public class PrenotazioneAttivita {
     @Column(name = "attivita_durata_snap", nullable = false)
     private Integer attivitaDurataSnap;
 
-
-
-    // AUDIT
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

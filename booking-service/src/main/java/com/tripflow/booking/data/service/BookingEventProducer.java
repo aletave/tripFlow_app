@@ -18,14 +18,6 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.UUID;
 
-/**
- * Pubblica su RabbitMQ gli eventi di booking destinati al catalog.
- *
- * I listener sono @TransactionalEventListener(AFTER_COMMIT), NON @EventListener:
- * la pubblicazione avviene solo a transazione conclusa con successo. Così
- * (1) non si annuncia al catalog un pagamento che poi viene rollbackato, e
- * (2) un RabbitMQ spento non fa più fallire il webhook Stripe.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j

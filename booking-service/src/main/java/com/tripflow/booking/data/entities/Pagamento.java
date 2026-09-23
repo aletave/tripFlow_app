@@ -16,9 +16,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-//Vincoli UNIQUE con nome esplicito (convenzione di progetto):
-//- un solo pagamento per prenotazione (relazione 1:1)
-//- un PaymentIntent Stripe non può essere collegato a due pagamenti
+
 @Table(name = "pagamento", uniqueConstraints = {
         @UniqueConstraint(name = "uk_pagamento_prenotazione",
                 columnNames = "prenotazione_id"),
@@ -31,20 +29,17 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 public class Pagamento {
-
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "id", updatable = false, nullable = false)
     private UUID id;
 
 
-    //relazione con Prenotazione (lato padrone, 1:1)
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "prenotazione_id", nullable = false)
     private Prenotazione prenotazione;
 
 
-    // dati pagamento
 
     @Column(name = "importo", nullable = false, precision = 10, scale = 2)
     private BigDecimal importo;
@@ -58,7 +53,6 @@ public class Pagamento {
     private StatoPagamento stato;
 
     //riferimenti stripe (non dati sensibili)
-    //opzionali per design
     @Column(name = "stripe_payment_intent_id", length = 100)
     private String stripePaymentIntentId;
 
@@ -80,4 +74,8 @@ public class Pagamento {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 }

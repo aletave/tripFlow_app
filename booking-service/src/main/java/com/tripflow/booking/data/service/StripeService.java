@@ -33,7 +33,7 @@ public class StripeService {
         this.webhookSecret = webhookSecret;
     }
 
-    //crea un PaymentIntent su Stripe. Usato da avviaPagamento.
+    //crea un PaymentIntent su Stripe. Usato da avviaPagamento
     public PaymentIntent creaPaymentIntent(BigDecimal importoEuro, UUID prenotazioneId) {
 
         long importoCentesimi = importoEuro

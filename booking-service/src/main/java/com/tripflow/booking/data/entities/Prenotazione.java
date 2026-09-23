@@ -18,7 +18,11 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "prenotazione")
+@Table(name = "prenotazione", indexes = {
+        @Index(name = "idx_prenotazione_hold_attivi",
+                columnList = "viaggio_id, stato, scadenza_il")
+})
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -39,7 +43,7 @@ public class Prenotazione {
 
 
     //snapshot dati viaggio
-    // (congelati al momento della prenotazione)
+    //(congelati al momento della prenotazione)
 
     @Column(name = "viaggio_titolo_snap", nullable = false, length = 255)
     private String viaggioTitoloSnap;
@@ -71,11 +75,14 @@ public class Prenotazione {
     @Column(name = "data_prenotazione", nullable = false)
     private LocalDateTime dataPrenotazione;
 
+    @Column(name = "scadenza_il")
+    private LocalDateTime scadenzaIl;
+
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 
 
-    //AUDIT
+    //audit
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -84,7 +91,11 @@ public class Prenotazione {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    //relazioni
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
+
     @OneToMany(mappedBy = "prenotazione", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<PrenotazioneAttivita> attivitaSelezionate = new ArrayList<>();
@@ -93,8 +104,7 @@ public class Prenotazione {
     private Pagamento pagamento;
 
 
-    // metodi helper
-    //setter custom (sovrascrive Lombok per coerenza bidirezionale)
+    //metodi helper
 
     public void setPagamento(Pagamento pagamento) {
         this.pagamento = pagamento;
@@ -103,8 +113,6 @@ public class Prenotazione {
         }
     }
 
-
-    //helper per la lista attività
 
     public void aggiungiAttivita(PrenotazioneAttivita attivita) {
         attivitaSelezionate.add(attivita);
@@ -125,4 +133,11 @@ public class Prenotazione {
         }
         this.prezzoTotale = prezzoUnitario.multiply(BigDecimal.valueOf(numeroPartecipanti));
     }
+
+    public boolean isScadutaAl(LocalDateTime riferimento) {
+        return stato == StatoPrenotazione.IN_ATTESA
+                && scadenzaIl != null
+                && scadenzaIl.isBefore(riferimento);
+    }
+
 }

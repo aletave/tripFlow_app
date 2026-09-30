@@ -8,5 +8,5 @@ import java.time.Duration;
 
 @Validated
 @ConfigurationProperties(prefix = "booking.prenotazione")
-public record PrenotazioneProperties(@NotNull Duration ttl) {
+public record PrenotazioneProperties(@NotNull Duration ttl, @NotNull Duration finestraPagamento) {
 }

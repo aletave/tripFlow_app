@@ -38,7 +38,7 @@
             "userinfo.token.claim": "true",
             "id.token.claim": "true",
             "access.token.claim": "true",
-            "claim.name": "nome"
+            "claim.name": "name"
           }
         }
       ]

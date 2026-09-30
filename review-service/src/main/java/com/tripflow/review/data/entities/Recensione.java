@@ -18,10 +18,6 @@ import java.util.UUID;
         name = "recensione",
         uniqueConstraints = {
                 @UniqueConstraint(
-                        name = "uq_recensione_prenotazione",
-                        columnNames = "prenotazione_id"
-                ),
-                @UniqueConstraint(
                         name = "uq_viaggiatore_oggetto",
                         columnNames = {"viaggiatore_id", "oggetto_id"}
                 )

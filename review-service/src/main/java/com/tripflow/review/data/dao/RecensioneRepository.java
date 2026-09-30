@@ -18,8 +18,6 @@ public interface RecensioneRepository extends JpaRepository<Recensione, UUID> {
 
     List<Recensione> findByViaggiatoreIdOrderByCreatedAtDesc(UUID viaggiatoreId);
 
-    Optional<Recensione> findByPrenotazioneId(UUID prenotazioneId);
-
     Optional<Recensione> findByViaggiatoreIdAndOggettoId(UUID viaggiatoreId, UUID oggettoId);
 
     long countByOggettoId(UUID oggettoId);

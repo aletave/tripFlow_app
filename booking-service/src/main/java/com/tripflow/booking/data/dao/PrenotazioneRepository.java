@@ -57,12 +57,13 @@ public interface PrenotazioneRepository extends JpaRepository<Prenotazione, UUID
     Optional<Prenotazione> trovaConAttivita(@Param("id") UUID id);
 
     @Query("""
-             SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
-             WHERE p.viaggioId = :viaggioId
-               AND p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.IN_ATTESA
-               AND p.scadenzaIl > :adesso
+           SELECT COALESCE(SUM(p.numeroPartecipanti), 0) FROM Prenotazione p
+                WHERE p.viaggioId = :viaggioId
+                    AND (p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.CONFERMATA
+                        OR (p.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.IN_ATTESA
+                            AND p.scadenzaIl > :adesso))
              """)
-    Integer sommaPostiTrattenuti(@Param("viaggioId") UUID viaggioId,
+    Integer sommaPostiOccupati(@Param("viaggioId") UUID viaggioId,
                                  @Param("adesso") LocalDateTime adesso);
 
 

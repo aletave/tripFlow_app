@@ -2,3 +2,5 @@
 *.iml
 target/
 .DS_Store
+# Chiavi Stripe locali (mai committare)
+.env.stripe

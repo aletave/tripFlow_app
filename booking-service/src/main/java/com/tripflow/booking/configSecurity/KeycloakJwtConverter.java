@@ -26,7 +26,7 @@ public class KeycloakJwtConverter implements Converter<Jwt, AbstractAuthenticati
 
         UtenteAutenticato principal = new UtenteAutenticato(
                 idUtente(jwt),
-                jwt.getClaimAsString("nome"),
+                jwt.getClaimAsString("name"),
                 ruoloApplicativo(ruoli));
 
         List<GrantedAuthority> authorities = ruoli.stream()

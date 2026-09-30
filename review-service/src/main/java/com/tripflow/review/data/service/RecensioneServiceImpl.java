@@ -10,10 +10,7 @@ import com.tripflow.review.data.dto.requests.RecensioneUpdateRequest;
 import com.tripflow.review.data.dto.responses.RecensioneResponse;
 import com.tripflow.review.data.entities.Recensione;
 import com.tripflow.review.data.entities.enums.TipoOggetto;
-import com.tripflow.review.exception.RecensioneEsistenteException;
-import com.tripflow.review.exception.RecensioneNotFoundException;
-import com.tripflow.review.exception.ReviewException;
-import com.tripflow.review.exception.StatoRecensioneException;
+import com.tripflow.review.exception.*;
 import com.tripflow.review.mapper.RecensioneMapper;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
@@ -59,10 +56,6 @@ public class RecensioneServiceImpl implements RecensioneService {
                 request.getOggettoId());
 
 
-        if (recensioneRepository.findByPrenotazioneId(request.getPrenotazioneId()).isPresent()) {
-            throw new RecensioneEsistenteException(
-                    "Esiste già una recensione per la prenotazione " + request.getPrenotazioneId());
-        }
         if (recensioneRepository
                 .findByViaggiatoreIdAndOggettoId(viaggiatoreId, request.getOggettoId())
                 .isPresent()) {
@@ -92,7 +85,9 @@ public class RecensioneServiceImpl implements RecensioneService {
                 .commento(request.getCommento())
                 .build();
 
-        Recensione saved = recensioneRepository.save(recensione);
+        //saveAndFlush: l'INSERT parte subito, cosi' una violazione di uq_viaggiatore_oggetto
+        //(due POST contemporanee) emerge qui come DataIntegrityViolationException -> 409
+        Recensione saved = recensioneRepository.saveAndFlush(recensione);
 
         log.info("Recensione creata: id={}, oggetto={}, valutazione={}",
                 saved.getId(), saved.getOggettoId(), saved.getValutazione());
@@ -200,10 +195,6 @@ public class RecensioneServiceImpl implements RecensioneService {
         try {
             verificaRecensibilita(viaggiatoreId, prenotazioneId, tipoOggetto, oggettoId);
 
-            //anche i duplicati impediscono di recensire di nuovo.
-            if (recensioneRepository.findByPrenotazioneId(prenotazioneId).isPresent()) {
-                return false;
-            }
             if (recensioneRepository
                     .findByViaggiatoreIdAndOggettoId(viaggiatoreId, oggettoId)
                     .isPresent()) {
@@ -211,7 +202,7 @@ public class RecensioneServiceImpl implements RecensioneService {
             }
             return true;
 
-        } catch (ReviewException | AccessDeniedException e) {
+        } catch (ReviewException | RisorsaNonTrovataException | AccessDeniedException e) {
             log.debug("puoRecensire=false per viaggiatore={}, prenotazione={}, oggetto={}: {}",
                     viaggiatoreId, prenotazioneId, oggettoId, e.getMessage());
             return false;
@@ -255,8 +246,8 @@ public class RecensioneServiceImpl implements RecensioneService {
             return bookingClient.getPrenotazione(prenotazioneId);
 
         } catch (FeignException.NotFound e) {
-            throw new ReviewException(
-                    "Prenotazione " + prenotazioneId + " non trovata su booking-service");
+            throw new RisorsaNonTrovataException(
+                    "Prenotazione " + prenotazioneId + " non trovata");
 
         } catch (FeignException.Forbidden e) {
             log.warn("Booking ha negato l'accesso a prenotazione {} per viaggiatore {}",
@@ -266,7 +257,8 @@ public class RecensioneServiceImpl implements RecensioneService {
         } catch (FeignException e) {
             log.error("Errore comunicazione con booking-service per prenotazione {}",
                     prenotazioneId, e);
-            throw new ReviewException("Errore nel verificare la prenotazione");
+            throw new ServizioNonDisponibileException(
+                    "Impossibile verificare la prenotazione: booking-service non disponibile");
         }
     }
 
@@ -277,13 +269,14 @@ public class RecensioneServiceImpl implements RecensioneService {
                     : catalogClient.getActivity(oggettoId).getName();
 
         } catch (FeignException.NotFound e) {
-            throw new ReviewException(
+            throw new RisorsaNonTrovataException(
                     (tipo == TipoOggetto.VIAGGIO ? "Viaggio " : "Attività ")
                             + oggettoId + " non trovato su catalog-service");
 
         } catch (FeignException e) {
             log.error("Errore comunicazione con catalog-service per {} {}", tipo, oggettoId, e);
-            throw new ReviewException("Errore nel recuperare i dati dell'oggetto");
+            throw new ServizioNonDisponibileException(
+                    "Impossibile recuperare i dati dell'oggetto: catalog-service non disponibile");
         }
     }
 }

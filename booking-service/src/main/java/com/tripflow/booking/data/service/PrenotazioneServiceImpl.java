@@ -3,6 +3,7 @@ package com.tripflow.booking.data.service;
 import com.tripflow.booking.client.CatalogClient;
 import com.tripflow.booking.client.dto.ActivityResponseDTO;
 import com.tripflow.booking.client.dto.TripResponseDTO;
+import com.tripflow.booking.config.handler.GlobalExceptionHandler;
 import com.tripflow.booking.configSecurity.UtenteAutenticato;
 import com.tripflow.booking.data.dao.PrenotazioneRepository;
 import com.tripflow.booking.data.dao.PrenotazioneAttivitaRepository;
@@ -17,6 +18,8 @@ import com.tripflow.booking.data.service.events.PagamentoCompletatoEvent;
 import com.tripflow.booking.data.service.events.PrenotazioneAnnullataEvent;
 import com.tripflow.booking.exception.BookingException;
 import com.tripflow.booking.exception.PrenotazioneNotFoundException;
+import com.tripflow.booking.exception.RisorsaNonTrovataException;
+import com.tripflow.booking.exception.ServizioNonDisponibileException;
 import com.tripflow.booking.exception.StatoPrenotazioneException;
 import com.tripflow.booking.mapper.PrenotazioneMapper;
 import com.tripflow.booking.config.PrenotazioneProperties;
@@ -31,7 +34,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.awt.print.Book;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,15 +67,21 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
         TripResponseDTO viaggio = recuperaViaggio(request.getViaggioId());
 
+        if(!viaggio.getStartDate().isAfter(LocalDate.now())){
+            throw new BookingException(
+                    "Impossibile prenotare: il viaggio " + viaggio.getId()
+                        + " è iniziato il " + viaggio.getStartDate()
+            );
+        }
 
         LocalDateTime adesso = LocalDateTime.now();
 
         prenotazioneRepository.bloccaViaggio(request.getViaggioId().toString());
 
-        int trattenuti = prenotazioneRepository.sommaPostiTrattenuti(
+        int occupati = prenotazioneRepository.sommaPostiOccupati(
                 request.getViaggioId(), adesso);
         int richiesti = request.getNumeroPartecipanti();
-        int disponibili = viaggio.getAvailableSpots() - trattenuti;
+        int disponibili = viaggio.getAvailableSpots() - occupati;
 
         if (richiesti > disponibili) {
             throw new BookingException(
@@ -80,7 +91,6 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         }
 
 
-        //Filtra le attività richieste dalla lista già restituita dal catalog
         List<ActivityResponseDTO> attivitaRichieste = filtraAttivitaRichieste(
                 viaggio, request.getAttivitaIds());
 
@@ -472,12 +482,12 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         try {
             return catalogClient.getTrip(viaggioId);
         } catch (FeignException.NotFound e) {
-            throw new BookingException("Viaggio non trovato nel catalog: " + viaggioId);
+            throw new RisorsaNonTrovataException("Viaggio non trovato nel catalog: " + viaggioId);
         } catch (FeignException e) {
             log.error("Errore comunicazione con catalog-service per viaggio {}",
                     viaggioId, e);
-            throw new BookingException(
-                    "Errore comunicazione con catalog-service: " + e.getMessage());
+            throw new ServizioNonDisponibileException(
+                    "Impossibile recuperare il viaggio: catalog-service non disponibile");
         }
     }
 
@@ -485,12 +495,12 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         try {
             return catalogClient.getActivity(attivitaId);
         } catch (FeignException.NotFound e) {
-            throw new BookingException("Attività non trovata nel catalog: " + attivitaId);
+            throw new RisorsaNonTrovataException("Attività non trovata nel catalog: " + attivitaId);
         } catch (FeignException e) {
             log.error("Errore comunicazione con catalog-service per attività {}",
                     attivitaId, e);
-            throw new BookingException(
-                    "Errore comunicazione con catalog-service: " + e.getMessage());
+            throw new ServizioNonDisponibileException(
+                    "Impossibile recuperare l'attività: catalog-service non disponibile");
         }
     }
 
@@ -520,7 +530,8 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         } catch (FeignException e) {
             log.error("Errore comunicazione con catalog-service per i viaggi dell'organizzatore {}",
                     organizzatoreId, e);
-            throw new BookingException("Errore comunicazione con catalog-service");
+            throw new ServizioNonDisponibileException(
+                    "Impossibile recuperare i viaggi dell'organizzatore: catalog-service non disponibile");
         }
     }
 
@@ -541,7 +552,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
 
         List<ActivityResponseDTO> selezionate = new ArrayList<>();
-        for (UUID id : attivitaIds) {
+        for (UUID id : attivitaIds.stream().distinct().toList()) {
             ActivityResponseDTO trovata = tutte.stream()
                     .filter(a -> a.getId().equals(id))
                     .findFirst()

@@ -1,6 +1,7 @@
 package com.tripflow.booking.data.service;
 
 import com.stripe.model.PaymentIntent;
+import com.tripflow.booking.config.PrenotazioneProperties;
 import com.tripflow.booking.data.dao.PagamentoRepository;
 import com.tripflow.booking.data.dao.PrenotazioneRepository;
 import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
@@ -42,6 +43,7 @@ public class PagamentoServiceImpl implements PagamentoService {
     private final PrenotazioneRepository prenotazioneRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final StripeService stripeService;
+    private final PrenotazioneProperties prenotazioneProperties;
 
 
     @Override
@@ -77,6 +79,10 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Pagamento già esistente per la prenotazione " + prenotazioneId);
         }
 
+        LocalDateTime nuovaScadenza = LocalDateTime.now().plus(prenotazioneProperties.finestraPagamento());
+        if(nuovaScadenza.isAfter(prenotazione.getScadenzaIl())) {
+            prenotazione.setScadenzaIl(nuovaScadenza);
+        }
 
         PaymentIntent paymentIntent =
                 stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
@@ -151,20 +157,28 @@ public class PagamentoServiceImpl implements PagamentoService {
 
         StripeService.DettagliCarta carta = stripeService.recuperaDettagliCarta(stripePaymentIntentId);
 
-        pagamento.setStato(StatoPagamento.COMPLETATO);
         pagamento.setDataPagamento(LocalDateTime.now());
         pagamento.setBrandCarta(carta.brand());
         pagamento.setUltimeQuattroCifre(carta.ultime4());
         pagamento.setMetodo(carta.metodo());
 
+        Prenotazione prenotazione = pagamento.getPrenotazione();
+        boolean prenotazioneAncoraValida = prenotazione.getStato() == StatoPrenotazione.IN_ATTESA
+                && !prenotazione.isScadutaAl(LocalDateTime.now());
+
+        if (!prenotazioneAncoraValida) {
+            pagamento.setStato(StatoPagamento.RIMBORSATO);
+            Pagamento saved = pagamentoRepository.save(pagamento);
+            log.warn("Pagamento {} arrivato con prenotazione {} in stato {} (scadenza {}): rimborsato",
+                    saved.getId(), prenotazione.getId(), prenotazione.getStato(), prenotazione.getScadenzaIl());
+            return PagamentoMapper.toResponse(saved);
+        }
+
+        pagamento.setStato(StatoPagamento.COMPLETATO);
         Pagamento saved = pagamentoRepository.save(pagamento);
 
-        UUID prenotazioneId = pagamento.getPrenotazione().getId();
-        log.info("Pagamento {} confermato per prenotazione {}", saved.getId(), prenotazioneId);
-
-
-        eventPublisher.publishEvent(new PagamentoCompletatoEvent(prenotazioneId));
-
+        log.info("Pagamento {} confermato per prenotazione {}", saved.getId(), prenotazione.getId());
+        eventPublisher.publishEvent(new PagamentoCompletatoEvent(prenotazione.getId()));
         return PagamentoMapper.toResponse(saved);
     }
 

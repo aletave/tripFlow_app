@@ -67,7 +67,6 @@ public class RecensioneServiceImpl implements RecensioneService {
 
         String oggettoNomeSnap = recuperaNomeOggetto(request.getTipoOggetto(), request.getOggettoId());
 
-        //autore_nome_snap e NOT NULL: se il token non porta il claim "nome", fallback
         if (autoreNome == null || autoreNome.isBlank()) {
             autoreNome = "Viaggiatore";
         }
@@ -85,8 +84,6 @@ public class RecensioneServiceImpl implements RecensioneService {
                 .commento(request.getCommento())
                 .build();
 
-        //saveAndFlush: l'INSERT parte subito, cosi' una violazione di uq_viaggiatore_oggetto
-        //(due POST contemporanee) emerge qui come DataIntegrityViolationException -> 409
         Recensione saved = recensioneRepository.saveAndFlush(recensione);
 
         log.info("Recensione creata: id={}, oggetto={}, valutazione={}",

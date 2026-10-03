@@ -8,8 +8,7 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-//Configurazione OpenAPI: abilita il pulsante "Authorize" nella Swagger UI
-//dichiarando lo schema bearer (JWT Keycloak) usato dagli endpoint protetti.
+
 @Configuration
 public class OpenApiConfig {
 

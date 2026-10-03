@@ -1,5 +1,6 @@
 package com.tripflow.review.configSecurity;
 
+import jakarta.ws.rs.HttpMethod;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,7 +28,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/v3/api-docs/**",
                                 "/swagger-ui/**",
-                                "/swagger-ui.html"
+                                "/swagger-ui.html",
+                                HttpMethod.GET, "/api/recensioni/oggetto/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

@@ -12,10 +12,13 @@
       "clientId": "tripflow-app",
       "enabled": true,
       "publicClient": true,
-      "standardFlowEnabled": false,
+      "standardFlowEnabled": true,
       "directAccessGrantsEnabled": true,
-      "redirectUris": ["http://localhost:8080/*"],
+      "redirectUris": ["http://localhost:8080/*", "http://localhost:3000/*", "http://localhost:5173/*"],
       "webOrigins": ["*"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
       "protocolMappers": [
         {
           "name": "realm-roles-mapper",

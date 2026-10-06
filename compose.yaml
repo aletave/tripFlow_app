@@ -52,6 +52,7 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_URL: "http://localhost:9090"
       KC_PROXY_HEADERS: xforwarded
     ports:
       - "9090:8080"

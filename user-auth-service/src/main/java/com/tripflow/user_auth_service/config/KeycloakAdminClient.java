@@ -35,6 +35,12 @@ public class KeycloakAdminClient {
     @Value("${keycloak.admin-password}")
     private String adminPassword;
 
+    @Value("${keycloak.client-id:admin-cli}")
+    private String clientId = "admin-cli";
+
+    @Value("${keycloak.client-secret:}")
+    private String clientSecret = "";
+
     //Crea l'utente su Keycloak, assegna il ruolo e restituisce il keycloak_id.
     //Se Keycloak risponde 409 (utente già presente, magari orfano) recupera l'UUID per email,
     //prima di adottarlo chiede a chi chiama (orfanoAdottabile) se l'account non esiste già nel DB:
@@ -122,23 +128,31 @@ public class KeycloakAdminClient {
         }
     }
 
-    //Istanza admin: realm "master" + client "admin-cli", credenziali da properties.
-    //Creata una sola volta e riusata (lazy con double-checked): il client è thread-safe.
-    //Visibilità package-private per poterla mockare nei test.
+    //Istanza admin: singleton thread-safe.
+    //Usa client_credentials se e' fornito un clientSecret, altrimenti fallback su password admin (master).
     private volatile Keycloak istanza;
 
     Keycloak getInstance() {
         if (istanza == null) {
             synchronized (this) {
                 if (istanza == null) {
-                    istanza = KeycloakBuilder.builder()
-                            .serverUrl(serverUrl)
-                            .realm("master")
-                            .clientId("admin-cli")
-                            .grantType(OAuth2Constants.PASSWORD)
-                            .username(adminUsername)
-                            .password(adminPassword)
-                            .build();
+                    KeycloakBuilder builder = KeycloakBuilder.builder().serverUrl(serverUrl);
+                    if (clientSecret != null && !clientSecret.isBlank()) {
+                        istanza = builder
+                                .realm(realmName)
+                                .clientId(clientId)
+                                .clientSecret(clientSecret)
+                                .grantType(OAuth2Constants.CLIENT_CREDENTIALS)
+                                .build();
+                    } else {
+                        istanza = builder
+                                .realm("master")
+                                .clientId(clientId)
+                                .grantType(OAuth2Constants.PASSWORD)
+                                .username(adminUsername)
+                                .password(adminPassword)
+                                .build();
+                    }
                 }
             }
         }

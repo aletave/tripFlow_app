@@ -50,6 +50,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Health check per eureka / container
+                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         // Registrazione: pubblica (il login avviene direttamente su Keycloak)
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         // Tutto il resto (profilo e lookup utenti) richiede un JWT valido.

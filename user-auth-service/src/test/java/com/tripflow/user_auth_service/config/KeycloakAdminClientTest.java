@@ -164,4 +164,15 @@ class KeycloakAdminClientTest {
         //la build di KeycloakBuilder non contatta il server: si verifica solo il singleton
         assertSame(clientFresco.getInstance(), clientFresco.getInstance());
     }
+
+    @Test
+    void getInstance_conClientSecret_ritornaSempreLaStessaIstanza() {
+        KeycloakAdminClient clientFresco = new KeycloakAdminClient();
+        ReflectionTestUtils.setField(clientFresco, "serverUrl", "http://localhost:9090");
+        ReflectionTestUtils.setField(clientFresco, "realmName", "tripflow");
+        ReflectionTestUtils.setField(clientFresco, "clientId", "user-auth-service");
+        ReflectionTestUtils.setField(clientFresco, "clientSecret", "secret123");
+
+        assertSame(clientFresco.getInstance(), clientFresco.getInstance());
+    }
 }

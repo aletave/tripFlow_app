@@ -20,7 +20,8 @@
         <java.version>17</java.version>
         <spring-cloud.version>2024.0.0</spring-cloud.version>
         <skipTests>true</skipTests>
-        <lombok.version>1.18.36</lombok.version>
+        <byte-buddy.version>1.18.12</byte-buddy.version>
+        <lombok.version>1.18.46</lombok.version>
     </properties>
 
     <dependencyManagement>

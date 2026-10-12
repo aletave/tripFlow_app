@@ -27,6 +27,7 @@ public final class PrenotazioneMapper {
         return PrenotazioneResponse.builder()
                 .id(p.getId())
                 .viaggiatoreId(p.getViaggiatoreId())
+                .viaggiatoreNome(p.getViaggiatoreNomeSnap())
                 .viaggioId(p.getViaggioId())
                 .titoloViaggio(p.getViaggioTitoloSnap())
                 .destinazione(p.getViaggioDestinazioneSnap())

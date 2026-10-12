@@ -60,7 +60,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
 
     @Override
-    public PrenotazioneResponse creaPrenotazione(UUID viaggiatoreId, PrenotazioneRequest request) {
+    public PrenotazioneResponse creaPrenotazione(UUID viaggiatoreId, String viaggiatoreNome, PrenotazioneRequest request) {
 
         log.info("Creazione prenotazione: viaggiatore={}, viaggio={}, partecipanti={}",
                 viaggiatoreId, request.getViaggioId(), request.getNumeroPartecipanti());
@@ -94,9 +94,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         List<ActivityResponseDTO> attivitaRichieste = filtraAttivitaRichieste(
                 viaggio, request.getAttivitaIds());
 
-        //check disponibilità posti per ogni attività richiesta
-        //TODO: in futuro confrontare con la somma dei partecipanti già
-        // prenotati per quella specifica attività.
+        //check disponibilità posti per ogni attività richiest
         for (ActivityResponseDTO att : attivitaRichieste) {
             if (richiesti > att.getAvailableSpots()) {
                 throw new BookingException(
@@ -106,8 +104,14 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
             }
         }
 
+        String nomeViaggiatore = viaggiatoreNome;
+        if(nomeViaggiatore == null || nomeViaggiatore.isBlank()){
+            nomeViaggiatore = "Viaggiatore";
+        }
+
         Prenotazione prenotazione = Prenotazione.builder()
                 .viaggiatoreId(viaggiatoreId)
+                .viaggiatoreNomeSnap(nomeViaggiatore)
                 .viaggioId(viaggio.getId())
                 .viaggioTitoloSnap(viaggio.getName())
                 .viaggioDestinazioneSnap(viaggio.getDestination())
@@ -143,15 +147,14 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
     @Override
     @Transactional(readOnly = true)
-    public PrenotazioneResponse trovaPrenotazione(UUID prenotazioneId, UUID viaggiatoreId) {
+    public PrenotazioneResponse trovaPrenotazione(UUID prenotazioneId, UtenteAutenticato utente) {
 
         Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
 
-        if (!prenotazione.getViaggiatoreId().equals(viaggiatoreId)) {
-            log.warn("Accesso negato a prenotazione {}: richiesto da {}, appartiene a {}",
-                    prenotazioneId, viaggiatoreId, prenotazione.getViaggiatoreId());
-            throw new AccessDeniedException("Prenotazione non accessibile");
+        boolean isViaggiatore = prenotazione.getViaggiatoreId().equals(utente.id());
+        if(!isViaggiatore){
+            verificaOrganizzatoreDelViaggio(prenotazione, utente);
         }
 
         return PrenotazioneMapper.toResponse(prenotazione);
@@ -523,6 +526,22 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
         return PrenotazioneSpecification.viaggioIdIn(suoiViaggi);
     }
+
+    private void verificaOrganizzatoreDelViaggio(Prenotazione prenotazione, UtenteAutenticato utente) {
+        if (!ORGANIZER.equals(utente.ruolo())) {
+            log.warn("Accesso negato a prenotazione {}: richiesto da {}, appartiene a {}",
+                    prenotazione.getId(), utente.id(), prenotazione.getViaggiatoreId());
+            throw new AccessDeniedException("Prenotazione non accessibile");
+        }
+
+        TripResponseDTO viaggio = recuperaViaggio(prenotazione.getViaggioId());
+        if(!utente.id().equals(viaggio.getOrganizerId())) {
+            log.warn("Accesso negato a prenotazione {}: {} non organizza il viaggio {}",
+                    prenotazione.getId(), utente.id(), prenotazione.getViaggioId());
+            throw new AccessDeniedException("Prenotazione non accessibile");
+        }
+    }
+
 
     private List<TripResponseDTO> recuperaViaggiDiOrganizzatore(UUID organizzatoreId) {
         try {

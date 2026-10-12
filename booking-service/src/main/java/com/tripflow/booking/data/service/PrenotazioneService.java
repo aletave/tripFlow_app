@@ -15,9 +15,9 @@ import java.util.UUID;
 
 public interface PrenotazioneService {
 
-    PrenotazioneResponse creaPrenotazione(UUID viaggiatoreId, PrenotazioneRequest request);
+    PrenotazioneResponse creaPrenotazione(UUID viaggiatoreId, String viaggiatoreNome, PrenotazioneRequest request);
 
-    PrenotazioneResponse trovaPrenotazione(UUID prenotazioneId, UUID viaggiatoreId);
+    PrenotazioneResponse trovaPrenotazione(UUID prenotazioneId, UtenteAutenticato utente);
 
     List<PrenotazioneResponse> trovaMiePrenotazioni(UUID viaggiatoreId);
 

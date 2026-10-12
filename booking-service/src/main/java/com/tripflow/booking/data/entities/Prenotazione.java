@@ -45,6 +45,9 @@ public class Prenotazione {
     //snapshot dati viaggio
     //(congelati al momento della prenotazione)
 
+    @Column(name = "viaggiatore_nome_snap", length = 255)
+    private String viaggiatoreNomeSnap;
+
     @Column(name = "viaggio_titolo_snap", nullable = false, length = 255)
     private String viaggioTitoloSnap;
 

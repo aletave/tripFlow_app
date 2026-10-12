@@ -11,6 +11,7 @@ public class PrenotazioneResponseDTO {
 
     private UUID id;
     private UUID viaggioId;
+    private UUID viaggiatoreId;
     private StatoPrenotazione stato;
     private List<PrenotazioneAttivitaResponseDTO> attivitaSelezionate;
 }

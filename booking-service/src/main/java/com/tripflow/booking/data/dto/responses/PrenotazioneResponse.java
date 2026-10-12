@@ -20,6 +20,7 @@ public class PrenotazioneResponse {
 
     private UUID id;
     private UUID viaggiatoreId;
+    private String viaggiatoreNome;
     private UUID viaggioId;
 
     //Snapshot del viaggio (Dati congelati)

@@ -216,7 +216,13 @@ public class RecensioneServiceImpl implements RecensioneService {
 
         PrenotazioneResponseDTO prenotazione = recuperaPrenotazione(prenotazioneId, viaggiatoreId);
 
-        if (prenotazione.getStato() != StatoPrenotazione.COMPLETATA) {
+        if(!viaggiatoreId.equals(prenotazione.getViaggiatoreId())) {
+            log.warn("Recensione negata: prenotazione {} non appartiene a {}", prenotazioneId, viaggiatoreId);
+            throw new AccessDeniedException("Prenotazione non accessibile");
+        }
+
+
+        if(prenotazione.getStato() != StatoPrenotazione.COMPLETATA) {
             throw new StatoRecensioneException(
                     "Impossibile recensire: prenotazione in stato " + prenotazione.getStato()
                             + " (richiesto COMPLETATA)");
@@ -231,7 +237,7 @@ public class RecensioneServiceImpl implements RecensioneService {
             boolean attivitaPresente = prenotazione.getAttivitaSelezionate() != null
                     && prenotazione.getAttivitaSelezionate().stream()
                     .anyMatch(a -> oggettoId.equals(a.getAttivitaId()));
-            if (!attivitaPresente) {
+            if(!attivitaPresente) {
                 throw new ReviewException(
                         "L'attività recensita non è inclusa nella prenotazione");
             }

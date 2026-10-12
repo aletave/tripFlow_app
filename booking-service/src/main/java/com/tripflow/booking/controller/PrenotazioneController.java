@@ -1,6 +1,7 @@
 package com.tripflow.booking.controller;
 
 import com.tripflow.booking.configSecurity.SecurityUtils;
+import com.tripflow.booking.configSecurity.UtenteAutenticato;
 import com.tripflow.booking.data.dto.requests.PrenotazioneAttivitaRequest;
 import com.tripflow.booking.data.dto.requests.PrenotazioneRequest;
 import com.tripflow.booking.data.dto.responses.PrenotazioneResponse;
@@ -39,12 +40,13 @@ public class PrenotazioneController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public PrenotazioneResponse crea(@Valid @RequestBody PrenotazioneRequest request) {
-        return prenotazioneService.creaPrenotazione(SecurityUtils.viaggiatoreId(), request);
+        UtenteAutenticato utente = SecurityUtils.utenteCorrente();
+        return prenotazioneService.creaPrenotazione(utente.id(), utente.nome(), request);
     }
 
     @GetMapping("/{id}")
     public PrenotazioneResponse trova(@PathVariable UUID id) {
-        return prenotazioneService.trovaPrenotazione(id, SecurityUtils.viaggiatoreId());
+        return prenotazioneService.trovaPrenotazione(id, SecurityUtils.utenteCorrente());
     }
 
     @GetMapping("/mie")

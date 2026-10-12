@@ -73,10 +73,18 @@ public class PagamentoServiceImpl implements PagamentoService {
 
 
         Optional<Pagamento> trova_esistente = pagamentoRepository.findByPrenotazioneId(prenotazioneId);
-        if (trova_esistente.isPresent()
-                && trova_esistente.get().getStato() != StatoPagamento.FALLITO) {
-            throw new PagamentoEsistenteException(
-                    "Pagamento già esistente per la prenotazione " + prenotazioneId);
+        if (trova_esistente.isPresent()) {
+            Pagamento esistente = trova_esistente.get();
+            boolean riprendibile = esistente.getStato() == StatoPagamento.IN_ATTESA
+                    || esistente.getStato() == StatoPagamento.FALLITO;
+            if (!riprendibile) {
+                throw new PagamentoEsistenteException(
+                        "Pagamento già esistente per la prenotazione " + prenotazioneId);
+            }
+            PaymentIntent intentEsistente = stripeService.recuperaPaymentIntent(esistente.getStripePaymentIntentId());
+            if (!"canceled".equals(intentEsistente.getStatus())) {
+                return riprendiPagamento(esistente, intentEsistente);
+            }
         }
 
         LocalDateTime nuovaScadenza = LocalDateTime.now().plus(prenotazioneProperties.finestraPagamento());
@@ -114,6 +122,31 @@ public class PagamentoServiceImpl implements PagamentoService {
                 .pagamentoId(saved.getId())
                 .clientSecret(paymentIntent.getClientSecret())
                 .importo(saved.getImporto())
+                .publishableKey(stripeService.getPublishableKey())
+                .build();
+    }
+
+    private PagamentoIntentResponse riprendiPagamento(Pagamento pagamento, PaymentIntent paymentIntent) {
+        String statoStripe = paymentIntent.getStatus();
+        boolean daCompletare = "requires_payment_method".equals(statoStripe)
+                || "requires_action".equals(statoStripe);
+        if (!daCompletare) {
+            throw new PagamentoEsistenteException(
+                    "Pagamento già in elaborazione per la prenotazione " + pagamento.getPrenotazione().getId());
+        }
+
+        if (pagamento.getStato() == StatoPagamento.FALLITO) {
+            pagamento.setStato(StatoPagamento.IN_ATTESA);
+            pagamentoRepository.save(pagamento);
+        }
+
+        log.info("Ripreso pagamento {} con PaymentIntent {}", pagamento.getId(), paymentIntent.getId());
+
+        return PagamentoIntentResponse.builder()
+                .pagamentoId(pagamento.getId())
+                .clientSecret(paymentIntent.getClientSecret())
+                .importo(pagamento.getImporto())
+                .publishableKey(stripeService.getPublishableKey())
                 .build();
     }
 
@@ -150,7 +183,7 @@ public class PagamentoServiceImpl implements PagamentoService {
             return PagamentoMapper.toResponse(pagamento);
         }
 
-        if (statoAttuale != StatoPagamento.IN_ATTESA) {
+        if (statoAttuale != StatoPagamento.IN_ATTESA && statoAttuale != StatoPagamento.FALLITO) {
             throw new StatoPagamentoException(
                     "Impossibile confermare: pagamento in stato " + statoAttuale);
         }

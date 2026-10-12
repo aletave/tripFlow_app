@@ -26,11 +26,27 @@ public class StripeService {
 
     private final StripeClient stripeClient;
     private final String webhookSecret;
+    private final String publishableKey;
 
     public StripeService(StripeClient stripeClient,
-                         @Value("${stripe.api.webhook-secret}") String webhookSecret) {
+                         @Value("${stripe.api.webhook-secret}") String webhookSecret,
+                         @Value("${stripe.api.publishable-key}") String publishableKey) {
         this.stripeClient = stripeClient;
         this.webhookSecret = webhookSecret;
+        this.publishableKey = publishableKey;
+    }
+
+    public String getPublishableKey() {
+        return publishableKey;
+    }
+
+    public PaymentIntent recuperaPaymentIntent(String paymentIntentId) {
+        try {
+            return stripeClient.paymentIntents().retrieve(paymentIntentId);
+        } catch (StripeException e) {
+            log.error("Errore Stripe recuperando il PaymentIntent {}: {}", paymentIntentId, e.getMessage());
+            throw new BookingException("Impossibile recuperare il pagamento presso Stripe");
+        }
     }
 
     //crea un PaymentIntent su Stripe. Usato da avviaPagamento

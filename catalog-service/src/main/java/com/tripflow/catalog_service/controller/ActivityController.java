@@ -1,6 +1,7 @@
 package com.tripflow.catalog_service.controller;
 
 
+import com.tripflow.catalog_service.configSecurity.SecurityUtils;
 import com.tripflow.catalog_service.dto.request.ActivityRequestDTO;
 import com.tripflow.catalog_service.dto.response.ActivityResponseDTO;
 import com.tripflow.catalog_service.service.ActivityService;
@@ -32,8 +33,8 @@ public class ActivityController {
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di creare una nuova attività", description = "Salva l'attività nel database e pubblica un evento tramite rabbitmq")
     public ResponseEntity<ActivityResponseDTO> createActivity(@Valid @RequestBody ActivityRequestDTO requestDTO) {
-
-        ActivityResponseDTO createdActivity = activityService.createActivity(requestDTO);
+        UUID organizerId = SecurityUtils.organizzatoreId();
+        ActivityResponseDTO createdActivity = activityService.createActivity(requestDTO, organizerId);
 
         return new ResponseEntity<>(createdActivity, HttpStatus.CREATED);
     }
@@ -50,8 +51,8 @@ public class ActivityController {
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di aggiornare i dettagli di un'attività", description = "Aggiorna un'attività nel db con una query che aggiorna i dettagli forniti")
     public ResponseEntity<ActivityResponseDTO> updateActivity(@PathVariable UUID id, @Valid @RequestBody ActivityRequestDTO requestDTO) {
-
-        ActivityResponseDTO updatedAct = activityService.updateActivity(id, requestDTO);
+        UUID organizerId = SecurityUtils.organizzatoreId();
+        ActivityResponseDTO updatedAct = activityService.updateActivity(id, requestDTO, organizerId);
 
         return ResponseEntity.ok(updatedAct);
     }
@@ -60,7 +61,8 @@ public class ActivityController {
     @PreAuthorize("hasRole('ORGANIZER')")
     @Operation(summary = "Permette di eliminare un'attività", description = "Elimina una data attività nel db")
     public ResponseEntity<Void> deleteActivity(@PathVariable UUID id) {
-        activityService.deleteActivity(id);
+        UUID organizerId = SecurityUtils.organizzatoreId();
+        activityService.deleteActivity(id, organizerId);
 
         return ResponseEntity.noContent().build();
     }

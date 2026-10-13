@@ -8,13 +8,13 @@ import java.util.UUID;
 
 public interface ActivityService {
 
-    ActivityResponseDTO createActivity(ActivityRequestDTO requestDTO);
+    ActivityResponseDTO createActivity(ActivityRequestDTO requestDTO, UUID organizerId);
 
     ActivityResponseDTO getActivityById(UUID id);
 
-    ActivityResponseDTO updateActivity(UUID id, ActivityRequestDTO requestDTO);
+    ActivityResponseDTO updateActivity(UUID id, ActivityRequestDTO requestDTO, UUID organizerId);
 
-    void deleteActivity(UUID id);
+    void deleteActivity(UUID id, UUID organizerId);
 
     List<ActivityResponseDTO> getActivitiesByTripId(UUID tripId);
 

@@ -33,9 +33,13 @@ public class ActivityServiceImpl implements ActivityService {
 
     @Override
     @Transactional
-    public ActivityResponseDTO createActivity(ActivityRequestDTO requestDTO) {
+    public ActivityResponseDTO createActivity(ActivityRequestDTO requestDTO, UUID organizerId) {
         Trip trip = tripRepository.findById(requestDTO.getTripId())
                 .orElseThrow(() -> new ResourceNotFoundException("viaggio non trovato con id: " + requestDTO.getTripId()));
+
+        if (!trip.getOrganizerId().equals(organizerId)) {
+            throw new RuntimeException("Non hai i permessi per aggiungere attività a questo viaggio");
+        }
 
         Activity activity = modelMapper.map(requestDTO, Activity.class);
 
@@ -57,9 +61,13 @@ public class ActivityServiceImpl implements ActivityService {
 
     @Override
     @Transactional
-    public ActivityResponseDTO updateActivity(UUID id, ActivityRequestDTO requestDTO) {
+    public ActivityResponseDTO updateActivity(UUID id, ActivityRequestDTO requestDTO, UUID organizerId) {
         Activity existingActivity = activityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("attività non trovata con id: " + id));
+
+        if (!existingActivity.getTrip().getOrganizerId().equals(organizerId)) {
+            throw new RuntimeException("Non hai i permessi per modificare questa attività");
+        }
 
         modelMapper.map(requestDTO, existingActivity);
 
@@ -70,11 +78,15 @@ public class ActivityServiceImpl implements ActivityService {
 
     @Override
     @Transactional
-    public void deleteActivity(UUID id) {
-        if (!activityRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Attività non trovata con id: " + id);
+    public void deleteActivity(UUID id, UUID organizerId) {
+        Activity activity = activityRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Attività non trovata con id: " + id));
+
+        if (!activity.getTrip().getOrganizerId().equals(organizerId)) {
+            throw new RuntimeException("Non hai i permessi per eliminare questa attività");
         }
-        activityRepository.deleteById(id);
+
+        activityRepository.delete(activity);
     }
 
     @Override

@@ -12,7 +12,7 @@ public record AddItineraryStopRequest(
         Integer stopOrder,
 
         @NotBlank @Size(max = 30)
-        String stopType, //(viaggio/attività)
+        String stopType,
 
         UUID viaggioId,
 
@@ -24,10 +24,10 @@ public record AddItineraryStopRequest(
         @NotBlank @Size(max = 150)
         String customDescription,
 
-        @NotBlank @Size(max = 150)
+        @NotNull
         LocalDateTime startDatetime,
 
-        @NotBlank @Size(max = 150)
+        @NotNull
         LocalDateTime endDatetime,
 
         String notes

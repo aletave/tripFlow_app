@@ -11,6 +11,7 @@ import com.tripflow.itinerary_service.mapper.ItineraryMapper;
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.ItineraryShare;
 import com.tripflow.itinerary_service.model.ItineraryStop;
+import com.tripflow.itinerary_service.model.Visibility;
 import com.tripflow.itinerary_service.repository.ItineraryRepository;
 import com.tripflow.itinerary_service.repository.ItineraryShareRepository;
 import com.tripflow.itinerary_service.repository.ItineraryStopRepository;
@@ -18,27 +19,22 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 // Service che contiene la logica applicativa relativa agli itinerari e alle tappe.
-// L'ownerId arriva sempre dal token JWT (subject) e non dai parametri client:
-// ogni accesso a un itinerario è protetto da un check di proprietà (403 se non owner).
+// Livelli di autorizzazione:
+// 1. READ: owner, shared user (via itinerary_shares), or PUBLIC visibility
+// 2. WRITE (stops/update): owner or shared user with can_edit = true
+// 3. MANAGE/DELETE: only owner
 @Service
 public class ItineraryService {
 
-    // Repository per la gestione CRUD degli itinerari
     private final ItineraryRepository itineraryRepository;
-
-    // Repository per la gestione CRUD delle tappe
     private final ItineraryStopRepository itineraryStopRepository;
-
-    // Repository per la gestione delle condivisioni
     private final ItineraryShareRepository itineraryShareRepository;
-
-    // Mapper per conversione DTO <-> Entity
     private final ItineraryMapper itineraryMapper;
 
-    // Dependency Injection di repository e mapper tramite costruttore
     public ItineraryService(
             ItineraryRepository itineraryRepository,
             ItineraryStopRepository itineraryStopRepository,
@@ -51,22 +47,27 @@ public class ItineraryService {
         this.itineraryMapper = itineraryMapper;
     }
 
-    // Crea un nuovo itinerario e lo salva nel database
     public ItineraryResponse createItinerary(CreateItineraryRequest request, UUID ownerId) {
         Itinerary itinerary = itineraryMapper.toEntity(request, ownerId);
         Itinerary savedItinerary = itineraryRepository.save(itinerary);
-
         return itineraryMapper.toResponse(savedItinerary);
     }
 
-    // Recupera un itinerario tramite ID, solo se appartiene all'owner autenticato
-    public ItineraryResponse getItineraryById(Long itineraryId, UUID ownerId) {
-        Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
-
+    public ItineraryResponse getItineraryById(Long itineraryId, UUID userId) {
+        Itinerary itinerary = findItineraryWithReadAccess(itineraryId, userId);
         return itineraryMapper.toResponse(itinerary);
     }
 
-    // Recupera tutti gli itinerari appartenenti a un owner
+    public ItineraryResponse getPublicItinerary(Long itineraryId) {
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+
+        if (itinerary.getVisibility() != Visibility.PUBLIC) {
+            throw new AccessDeniedException("Itinerary is not public");
+        }
+        return itineraryMapper.toResponse(itinerary);
+    }
+
     public List<ItineraryResponse> getItinerariesByOwner(UUID ownerId) {
         return itineraryRepository.findByOwnerId(ownerId)
                 .stream()
@@ -74,39 +75,25 @@ public class ItineraryService {
                 .toList();
     }
 
-    // Aggiunge una nuova tappa a un itinerario esistente, solo se appartiene all'owner autenticato
-    public ItineraryStopResponse addStopToItinerary(
-            Long itineraryId,
-            AddItineraryStopRequest request,
-            UUID ownerId
-    ) {
-        Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
-
+    public ItineraryStopResponse addStopToItinerary(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
+        Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         ItineraryStop stop = itineraryMapper.toStopEntity(request, itinerary);
         ItineraryStop savedStop = itineraryStopRepository.save(stop);
-
         return itineraryMapper.toStopResponse(savedStop);
     }
 
-    // Elimina un itinerario dal database, solo se appartiene all'owner autenticato
     public void deleteItinerary(Long itineraryId, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
-
         itineraryRepository.delete(itinerary);
     }
 
-    // Carica l'itinerario e verifica la proprietà: 404 se non esiste, 403 se di un altro owner
-    private Itinerary findOwnedItinerary(Long itineraryId, UUID ownerId) {
-        Itinerary itinerary = itineraryRepository.findById(itineraryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
-
-        if (!itinerary.getOwnerId().equals(ownerId)) {
-            throw new AccessDeniedException("Itinerary not accessible");
-        }
-        return itinerary;
+    public ItineraryResponse updateItinerary(Long itineraryId, CreateItineraryRequest request, UUID userId) {
+        Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
+        itineraryMapper.updateEntity(request, itinerary);
+        Itinerary updated = itineraryRepository.save(itinerary);
+        return itineraryMapper.toResponse(updated);
     }
 
-    // Condivide un itinerario con un altro utente (solo l'owner può condividere)
     public ItineraryShareResponse shareItinerary(Long itineraryId, ShareItineraryRequest request, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
 
@@ -120,11 +107,9 @@ public class ItineraryService {
         share.setCanEdit(request.canEdit());
 
         ItineraryShare savedShare = itineraryShareRepository.save(share);
-
         return toShareResponse(savedShare);
     }
 
-    // Rimuove una condivisione (solo l'owner può rimuovere)
     public void removeShare(Long itineraryId, UUID sharedWithUserId, UUID ownerId) {
         findOwnedItinerary(itineraryId, ownerId);
 
@@ -134,7 +119,6 @@ public class ItineraryService {
         itineraryShareRepository.deleteByItineraryIdAndSharedWithUserId(itineraryId, sharedWithUserId);
     }
 
-    // Recupera tutte le condivisioni di un itinerario (solo l'owner)
     public List<ItineraryShareResponse> getShares(Long itineraryId, UUID ownerId) {
         findOwnedItinerary(itineraryId, ownerId);
 
@@ -144,7 +128,55 @@ public class ItineraryService {
                 .toList();
     }
 
-    // Converte ItineraryShare entity in ItineraryShareResponse DTO
+    private Itinerary findOwnedItinerary(Long itineraryId, UUID ownerId) {
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+
+        if (!itinerary.getOwnerId().equals(ownerId)) {
+            throw new AccessDeniedException("Only the owner can perform this action");
+        }
+        return itinerary;
+    }
+
+    private Itinerary findItineraryWithReadAccess(Long itineraryId, UUID userId) {
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+
+        if (hasReadAccess(itinerary, userId)) {
+            return itinerary;
+        }
+        throw new AccessDeniedException("Itinerary not accessible");
+    }
+
+    private Itinerary findItineraryWithWriteAccess(Long itineraryId, UUID userId) {
+        Itinerary itinerary = itineraryRepository.findById(itineraryId)
+                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
+
+        if (hasWriteAccess(itinerary, userId)) {
+            return itinerary;
+        }
+        throw new AccessDeniedException("Not authorized to modify this itinerary");
+    }
+
+    private boolean hasReadAccess(Itinerary itinerary, UUID userId) {
+        if (itinerary.getOwnerId().equals(userId)) {
+            return true;
+        }
+        if (itinerary.getVisibility() == Visibility.PUBLIC) {
+            return true;
+        }
+        return itineraryShareRepository.findByItineraryIdAndSharedWithUserId(itinerary.getId(), userId)
+                .isPresent();
+    }
+
+    private boolean hasWriteAccess(Itinerary itinerary, UUID userId) {
+        if (itinerary.getOwnerId().equals(userId)) {
+            return true;
+        }
+        Optional<ItineraryShare> share = itineraryShareRepository.findByItineraryIdAndSharedWithUserId(itinerary.getId(), userId);
+        return share.isPresent() && share.get().isCanEdit();
+    }
+
     private ItineraryShareResponse toShareResponse(ItineraryShare share) {
         return new ItineraryShareResponse(
                 share.getId(),

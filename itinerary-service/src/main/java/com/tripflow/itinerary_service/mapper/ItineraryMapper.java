@@ -102,4 +102,12 @@ public class ItineraryMapper {
                 stop.getNotes()
         );
     }
+
+    public void updateEntity(CreateItineraryRequest request, Itinerary itinerary) {
+        itinerary.setTitle(request.title());
+        itinerary.setDescription(request.description());
+        itinerary.setVisibility(request.visibility());
+        itinerary.setStartDate(request.startDate());
+        itinerary.setEndDate(request.endDate());
+    }
 }

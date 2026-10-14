@@ -1,6 +1,7 @@
 package com.tripflow.itinerary_service.repository;
 
 import com.tripflow.itinerary_service.model.Itinerary;
+import com.tripflow.itinerary_service.model.Visibility;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -19,5 +20,5 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
     boolean existsByIdAndOwnerId(Long id, UUID ownerId);
 
     // opzionale: filtra per visibilità
-    List<Itinerary> findByVisibility(String visibility);
+    List<Itinerary> findByVisibility(Visibility visibility);
 }

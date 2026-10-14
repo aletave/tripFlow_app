@@ -30,8 +30,9 @@ public class Itinerary {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
-    private String visibility;
+    private Visibility visibility;
 
     @Column(name = "start_date")
     private LocalDate startDate;

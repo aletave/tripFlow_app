@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.dto.response;
 
+import com.tripflow.itinerary_service.model.Visibility;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +17,7 @@ public record ItineraryResponse(
 
         String description,
 
-        String visibility,
+        Visibility visibility,
 
         LocalDate startDate,
 

@@ -1,6 +1,8 @@
 package com.tripflow.itinerary_service.dto.request;
 
+import com.tripflow.itinerary_service.model.Visibility;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -13,9 +15,8 @@ public record CreateItineraryRequest(
 
         String description,
 
-        @NotBlank
-        @Size(max = 30)
-        String visibility,
+        @NotNull
+        Visibility visibility,
 
         LocalDate startDate,
 

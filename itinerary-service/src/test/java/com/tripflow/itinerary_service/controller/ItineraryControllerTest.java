@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.tripflow.itinerary_service.model.Visibility;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
@@ -60,7 +61,7 @@ class ItineraryControllerTest {
     private ItineraryResponse rispostaEsempio() {
         return new ItineraryResponse(
                 1L, OWNER_ID, "Vacanza a Roma", "Weekend nel centro storico",
-                "PRIVATE", null, null, null, null, List.of());
+                Visibility.PRIVATE, null, null, null, null, List.of());
     }
 
     //Il 'sub' del token finisce come ownerId nel service: niente ownerId dai parametri client

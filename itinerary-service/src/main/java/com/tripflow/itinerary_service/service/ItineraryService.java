@@ -2,13 +2,17 @@ package com.tripflow.itinerary_service.service;
 
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
+import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.exception.ResourceNotFoundException;
 import com.tripflow.itinerary_service.mapper.ItineraryMapper;
 import com.tripflow.itinerary_service.model.Itinerary;
+import com.tripflow.itinerary_service.model.ItineraryShare;
 import com.tripflow.itinerary_service.model.ItineraryStop;
 import com.tripflow.itinerary_service.repository.ItineraryRepository;
+import com.tripflow.itinerary_service.repository.ItineraryShareRepository;
 import com.tripflow.itinerary_service.repository.ItineraryStopRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -28,6 +32,9 @@ public class ItineraryService {
     // Repository per la gestione CRUD delle tappe
     private final ItineraryStopRepository itineraryStopRepository;
 
+    // Repository per la gestione delle condivisioni
+    private final ItineraryShareRepository itineraryShareRepository;
+
     // Mapper per conversione DTO <-> Entity
     private final ItineraryMapper itineraryMapper;
 
@@ -35,10 +42,12 @@ public class ItineraryService {
     public ItineraryService(
             ItineraryRepository itineraryRepository,
             ItineraryStopRepository itineraryStopRepository,
+            ItineraryShareRepository itineraryShareRepository,
             ItineraryMapper itineraryMapper
     ) {
         this.itineraryRepository = itineraryRepository;
         this.itineraryStopRepository = itineraryStopRepository;
+        this.itineraryShareRepository = itineraryShareRepository;
         this.itineraryMapper = itineraryMapper;
     }
 
@@ -95,5 +104,54 @@ public class ItineraryService {
             throw new AccessDeniedException("Itinerary not accessible");
         }
         return itinerary;
+    }
+
+    // Condivide un itinerario con un altro utente (solo l'owner può condividere)
+    public ItineraryShareResponse shareItinerary(Long itineraryId, ShareItineraryRequest request, UUID ownerId) {
+        Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
+
+        if (itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(itineraryId, request.sharedWithUserId())) {
+            throw new IllegalArgumentException("Itinerary already shared with this user");
+        }
+
+        ItineraryShare share = new ItineraryShare();
+        share.setItineraryId(itineraryId);
+        share.setSharedWithUserId(request.sharedWithUserId());
+        share.setCanEdit(request.canEdit());
+
+        ItineraryShare savedShare = itineraryShareRepository.save(share);
+
+        return toShareResponse(savedShare);
+    }
+
+    // Rimuove una condivisione (solo l'owner può rimuovere)
+    public void removeShare(Long itineraryId, UUID sharedWithUserId, UUID ownerId) {
+        findOwnedItinerary(itineraryId, ownerId);
+
+        if (!itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(itineraryId, sharedWithUserId)) {
+            throw new ResourceNotFoundException("Share not found for itinerary " + itineraryId + " and user " + sharedWithUserId);
+        }
+        itineraryShareRepository.deleteByItineraryIdAndSharedWithUserId(itineraryId, sharedWithUserId);
+    }
+
+    // Recupera tutte le condivisioni di un itinerario (solo l'owner)
+    public List<ItineraryShareResponse> getShares(Long itineraryId, UUID ownerId) {
+        findOwnedItinerary(itineraryId, ownerId);
+
+        return itineraryShareRepository.findByItineraryId(itineraryId)
+                .stream()
+                .map(this::toShareResponse)
+                .toList();
+    }
+
+    // Converte ItineraryShare entity in ItineraryShareResponse DTO
+    private ItineraryShareResponse toShareResponse(ItineraryShare share) {
+        return new ItineraryShareResponse(
+                share.getId(),
+                share.getItineraryId(),
+                share.getSharedWithUserId(),
+                share.isCanEdit(),
+                share.getCreatedAt()
+        );
     }
 }

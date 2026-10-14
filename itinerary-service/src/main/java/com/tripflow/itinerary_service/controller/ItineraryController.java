@@ -3,7 +3,9 @@ package com.tripflow.itinerary_service.controller;
 import com.tripflow.itinerary_service.configSecurity.SecurityUtils;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
+import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.service.ItineraryService;
 import jakarta.validation.Valid;
@@ -57,5 +59,29 @@ public class ItineraryController {
     @DeleteMapping("/{id}")
     public void deleteItinerary(@PathVariable Long id) {
         itineraryService.deleteItinerary(id, SecurityUtils.ownerId());
+    }
+
+    // Condivide un itinerario con un altro utente (solo l'owner può condividere)
+    @PostMapping("/{id}/shares")
+    public ItineraryShareResponse shareItinerary(
+            @PathVariable Long id,
+            @Valid @RequestBody ShareItineraryRequest request
+    ) {
+        return itineraryService.shareItinerary(id, request, SecurityUtils.ownerId());
+    }
+
+    // Rimuove una condivisione (solo l'owner può rimuovere)
+    @DeleteMapping("/{id}/shares/{sharedWithUserId}")
+    public void removeShare(
+            @PathVariable Long id,
+            @PathVariable java.util.UUID sharedWithUserId
+    ) {
+        itineraryService.removeShare(id, sharedWithUserId, SecurityUtils.ownerId());
+    }
+
+    // Recupera tutte le condivisioni di un itinerario (solo l'owner)
+    @GetMapping("/{id}/shares")
+    public List<ItineraryShareResponse> getShares(@PathVariable Long id) {
+        return itineraryService.getShares(id, SecurityUtils.ownerId());
     }
 }

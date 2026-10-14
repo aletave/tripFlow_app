@@ -35,6 +35,8 @@ public class SecurityConfig {
                                 "/swagger-ui/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+                        // Public itinerary access (no auth required)
+                        .requestMatchers("/api/itineraries/public/**").permitAll()
                         // Tutto il resto richiede un JWT valido
                         .anyRequest().authenticated()
                 )

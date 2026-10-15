@@ -4,6 +4,7 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.tripflow.itinerary_service.configSecurity.SecurityConfig;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.exception.ResourceNotFoundException;
+import com.tripflow.itinerary_service.model.Visibility;
 import com.tripflow.itinerary_service.service.ItineraryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +19,6 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.tripflow.itinerary_service.model.Visibility;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
@@ -38,9 +38,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, ItineraryControllerTest.TestJwtConfig.class})
 class ItineraryControllerTest {
 
-    //UUID che simula il 'sub' del token emesso da Keycloak
     private static final UUID OWNER_ID = UUID.fromString("70cd15d7-3a55-407c-9909-1f575e86cbfe");
     private static final String OWNER_SUB = OWNER_ID.toString();
+    private static final UUID SHARED_USER_ID = UUID.fromString("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    private static final String SHARED_USER_SUB = SHARED_USER_ID.toString();
+    private static final UUID STRANGER_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
+    private static final String STRANGER_SUB = STRANGER_ID.toString();
 
     @Autowired
     private MockMvc mockMvc;
@@ -58,16 +61,27 @@ class ItineraryControllerTest {
             }
             """;
 
-    private ItineraryResponse rispostaEsempio() {
+    private ItineraryResponse privateItinerary() {
         return new ItineraryResponse(
                 1L, OWNER_ID, "Vacanza a Roma", "Weekend nel centro storico",
                 Visibility.PRIVATE, null, null, null, null, List.of());
     }
 
-    //Il 'sub' del token finisce come ownerId nel service: niente ownerId dai parametri client
+    private ItineraryResponse publicItinerary() {
+        return new ItineraryResponse(
+                2L, OWNER_ID, "Itinerario Pubblico", "Visibile a tutti",
+                Visibility.PUBLIC, null, null, null, null, List.of());
+    }
+
+    private ItineraryResponse sharedItinerary() {
+        return new ItineraryResponse(
+                3L, OWNER_ID, "Itinerario Condiviso", "Condiviso con utente",
+                Visibility.SHARED, null, null, null, null, List.of());
+    }
+
     @Test
     void createItinerary_subDelTokenDiventaOwnerId_201() throws Exception {
-        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(rispostaEsempio());
+        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(privateItinerary());
 
         mockMvc.perform(post("/api/itineraries")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
@@ -80,21 +94,9 @@ class ItineraryControllerTest {
         verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
     }
 
-    //Subject diverso dall'owner dell'itinerario -> il service lancia AccessDeniedException -> 403
-    @Test
-    void getItineraryById_subjectDiversoDallOwner_403() throws Exception {
-        when(itineraryService.getItineraryById(eq(1L), any(UUID.class)))
-                .thenThrow(new AccessDeniedException("Itinerary not accessible"));
-
-        mockMvc.perform(get("/api/itineraries/1")
-                        .with(jwt().jwt(j -> j.subject("11111111-2222-3333-4444-555555555555"))))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Itinerary not accessible"));
-    }
-
     @Test
     void getItineraryById_ownerCorretto_200() throws Exception {
-        when(itineraryService.getItineraryById(1L, OWNER_ID)).thenReturn(rispostaEsempio());
+        when(itineraryService.getItineraryById(1L, OWNER_ID)).thenReturn(privateItinerary());
 
         mockMvc.perform(get("/api/itineraries/1")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
@@ -106,8 +108,67 @@ class ItineraryControllerTest {
     }
 
     @Test
+    void getItineraryById_sharedUserWithReadAccess_200() throws Exception {
+        when(itineraryService.getItineraryById(3L, SHARED_USER_ID)).thenReturn(sharedItinerary());
+
+        mockMvc.perform(get("/api/itineraries/3")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(3))
+                .andExpect(jsonPath("$.ownerId").value(OWNER_SUB));
+
+        verify(itineraryService).getItineraryById(3L, SHARED_USER_ID);
+    }
+
+    @Test
+    void getItineraryById_publicVisibility_200() throws Exception {
+        when(itineraryService.getItineraryById(2L, STRANGER_ID)).thenReturn(publicItinerary());
+
+        mockMvc.perform(get("/api/itineraries/2")
+                        .with(jwt().jwt(j -> j.subject(STRANGER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(2))
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"));
+
+        verify(itineraryService).getItineraryById(2L, STRANGER_ID);
+    }
+
+    @Test
+    void getItineraryById_subjectDiversoDallOwnerPrivate_403() throws Exception {
+        when(itineraryService.getItineraryById(eq(1L), any(UUID.class)))
+                .thenThrow(new AccessDeniedException("Itinerary not accessible"));
+
+        mockMvc.perform(get("/api/itineraries/1")
+                        .with(jwt().jwt(j -> j.subject(STRANGER_SUB))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Itinerary not accessible"));
+    }
+
+    @Test
+    void getPublicItinerary_publicVisibility_200() throws Exception {
+        when(itineraryService.getPublicItinerary(2L)).thenReturn(publicItinerary());
+
+        mockMvc.perform(get("/api/itineraries/public/2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(2))
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"));
+
+        verify(itineraryService).getPublicItinerary(2L);
+    }
+
+    @Test
+    void getPublicItinerary_privateVisibility_403() throws Exception {
+        when(itineraryService.getPublicItinerary(1L))
+                .thenThrow(new AccessDeniedException("Itinerary is not public"));
+
+        mockMvc.perform(get("/api/itineraries/public/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Itinerary is not public"));
+    }
+
+    @Test
     void getItinerariesByOwner_usaOwnerDalToken_200() throws Exception {
-        when(itineraryService.getItinerariesByOwner(OWNER_ID)).thenReturn(List.of(rispostaEsempio()));
+        when(itineraryService.getItinerariesByOwner(OWNER_ID)).thenReturn(List.of(privateItinerary()));
 
         mockMvc.perform(get("/api/itineraries/mie")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
@@ -118,13 +179,168 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void deleteItinerary_subjectDiversoDallOwner_403() throws Exception {
-        org.mockito.Mockito.doThrow(new AccessDeniedException("Itinerary not accessible"))
-                .when(itineraryService).deleteItinerary(eq(1L), any(UUID.class));
+    void addStopToItinerary_owner_200() throws Exception {
+        String stopBody = """
+                {
+                  "stopOrder": 1,
+                  "stopType": "ACTIVITY",
+                  "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                  "customTitle": "Visita Colosseo",
+                  "customDescription": "Tour guidato",
+                  "startDatetime": "2026-09-01T10:00:00",
+                  "endDatetime": "2026-09-01T12:00:00"
+                }
+                """;
 
-        mockMvc.perform(delete("/api/itineraries/1")
-                        .with(jwt().jwt(j -> j.subject("11111111-2222-3333-4444-555555555555"))))
+        mockMvc.perform(post("/api/itineraries/1/stops")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stopBody))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).addStopToItinerary(eq(1L), any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void addStopToItinerary_sharedUserWithEditAccess_200() throws Exception {
+        String stopBody = """
+                {
+                  "stopOrder": 1,
+                  "stopType": "ACTIVITY",
+                  "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                  "customTitle": "Visita Colosseo",
+                  "customDescription": "Tour guidato",
+                  "startDatetime": "2026-09-01T10:00:00",
+                  "endDatetime": "2026-09-01T12:00:00"
+                }
+                """;
+
+        mockMvc.perform(post("/api/itineraries/3/stops")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stopBody))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).addStopToItinerary(eq(3L), any(), eq(SHARED_USER_ID));
+    }
+
+    @Test
+    void addStopToItinerary_sharedUserWithoutEditAccess_403() throws Exception {
+        String stopBody = """
+                {
+                  "stopOrder": 1,
+                  "stopType": "ACTIVITY",
+                  "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                  "customTitle": "Visita Colosseo",
+                  "customDescription": "Tour guidato",
+                  "startDatetime": "2026-09-01T10:00:00",
+                  "endDatetime": "2026-09-01T12:00:00"
+                }
+                """;
+
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Not authorized to modify this itinerary"))
+                .when(itineraryService).addStopToItinerary(eq(3L), any(), eq(SHARED_USER_ID));
+
+        mockMvc.perform(post("/api/itineraries/3/stops")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stopBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Not authorized to modify this itinerary"));
+    }
+
+    @Test
+    void addStopToItinerary_stranger_403() throws Exception {
+        String stopBody = """
+                {
+                  "stopOrder": 1,
+                  "stopType": "ACTIVITY",
+                  "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+                  "customTitle": "Visita Colosseo",
+                  "customDescription": "Tour guidato",
+                  "startDatetime": "2026-09-01T10:00:00",
+                  "endDatetime": "2026-09-01T12:00:00"
+                }
+                """;
+
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Not authorized to modify this itinerary"))
+                .when(itineraryService).addStopToItinerary(eq(1L), any(), eq(STRANGER_ID));
+
+        mockMvc.perform(post("/api/itineraries/1/stops")
+                        .with(jwt().jwt(j -> j.subject(STRANGER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(stopBody))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateItinerary_owner_200() throws Exception {
+        String updateBody = """
+                {
+                  "title": "Titolo Aggiornato",
+                  "description": "Nuova descrizione",
+                  "visibility": "PRIVATE",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-09-03"
+                }
+                """;
+
+        when(itineraryService.updateItinerary(eq(1L), any(), eq(OWNER_ID))).thenReturn(privateItinerary());
+
+        mockMvc.perform(put("/api/itineraries/1")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Vacanza a Roma"));
+
+        verify(itineraryService).updateItinerary(eq(1L), any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void updateItinerary_sharedUserWithEditAccess_200() throws Exception {
+        String updateBody = """
+                {
+                  "title": "Titolo Aggiornato",
+                  "description": "Nuova descrizione",
+                  "visibility": "PRIVATE",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-09-03"
+                }
+                """;
+
+        when(itineraryService.updateItinerary(eq(3L), any(), eq(SHARED_USER_ID))).thenReturn(sharedItinerary());
+
+        mockMvc.perform(put("/api/itineraries/3")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).updateItinerary(eq(3L), any(), eq(SHARED_USER_ID));
+    }
+
+    @Test
+    void updateItinerary_sharedUserWithoutEditAccess_403() throws Exception {
+        String updateBody = """
+                {
+                  "title": "Titolo Aggiornato",
+                  "description": "Nuova descrizione",
+                  "visibility": "PRIVATE",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-09-03"
+                }
+                """;
+
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Not authorized to modify this itinerary"))
+                .when(itineraryService).updateItinerary(eq(3L), any(), eq(SHARED_USER_ID));
+
+        mockMvc.perform(put("/api/itineraries/3")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateBody))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Not authorized to modify this itinerary"));
     }
 
     @Test
@@ -137,6 +353,27 @@ class ItineraryControllerTest {
                 .andExpect(status().isOk());
 
         verify(itineraryService).deleteItinerary(1L, OWNER_ID);
+    }
+
+    @Test
+    void deleteItinerary_sharedUser_403() throws Exception {
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Only the owner can perform this action"))
+                .when(itineraryService).deleteItinerary(eq(3L), eq(SHARED_USER_ID));
+
+        mockMvc.perform(delete("/api/itineraries/3")
+                        .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB))))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Only the owner can perform this action"));
+    }
+
+    @Test
+    void deleteItinerary_stranger_403() throws Exception {
+        org.mockito.Mockito.doThrow(new AccessDeniedException("Only the owner can perform this action"))
+                .when(itineraryService).deleteItinerary(eq(1L), eq(STRANGER_ID));
+
+        mockMvc.perform(delete("/api/itineraries/1")
+                        .with(jwt().jwt(j -> j.subject(STRANGER_SUB))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -182,8 +419,6 @@ class ItineraryControllerTest {
 
     @Test
     void routeInesistente_404() throws Exception {
-        //URL fuori dal contesto del controller: se restasse dentro /api/itineraries/*
-        //matcherebbe /{id} e produrrebbe un 400 (type mismatch), non un 404
         mockMvc.perform(get("/api/non-esistente")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
                 .andExpect(status().isNotFound())
@@ -201,8 +436,6 @@ class ItineraryControllerTest {
                 .andExpect(jsonPath("$.message").value("Errore interno del server"));
     }
 
-    //JwtDecoder locale con chiave RSA di test: la security chain di SecurityConfig
-    //non deve contattare Keycloak/JWKS durante i test.
     @TestConfiguration
     static class TestJwtConfig {
 

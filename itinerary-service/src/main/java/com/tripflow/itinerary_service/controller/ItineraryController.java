@@ -4,6 +4,8 @@ import com.tripflow.itinerary_service.configSecurity.SecurityUtils;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
@@ -16,7 +18,10 @@ import java.util.List;
 // Controller REST che espone gli endpoint HTTP per itinerari e tappe.
 // Livelli di autorizzazione:
 // - GET /{id}: owner o utente con condivisione (read) o PUBLIC
-// - POST /{id}/stops, PUT /{id}: owner o utente con condivisione e can_edit=true
+// - POST /{id}/stops, PUT /{id}/stops/{stopId}: owner o utente con condivisione e can_edit=true
+// - DELETE /{id}/stops/{stopId}: owner o utente con condivisione e can_edit=true
+// - PATCH /{id}/visibility: solo owner
+// - PUT /{id}: owner o utente con condivisione e can_edit=true
 // - DELETE /{id}, shares management: solo owner
 // - GET /public/{id}: accesso pubblico (solo PUBLIC visibility)
 @RestController
@@ -57,6 +62,31 @@ public class ItineraryController {
             @Valid @RequestBody AddItineraryStopRequest request
     ) {
         return itineraryService.addStopToItinerary(id, request, SecurityUtils.ownerId());
+    }
+
+    @PutMapping("/{id}/stops/{stopId}")
+    public ItineraryStopResponse updateStop(
+            @PathVariable Long id,
+            @PathVariable Long stopId,
+            @Valid @RequestBody UpdateItineraryStopRequest request
+    ) {
+        return itineraryService.updateStop(id, stopId, request, SecurityUtils.ownerId());
+    }
+
+    @DeleteMapping("/{id}/stops/{stopId}")
+    public void deleteStop(
+            @PathVariable Long id,
+            @PathVariable Long stopId
+    ) {
+        itineraryService.deleteStop(id, stopId, SecurityUtils.ownerId());
+    }
+
+    @PatchMapping("/{id}/visibility")
+    public ItineraryResponse updateVisibility(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateVisibilityRequest request
+    ) {
+        return itineraryService.updateVisibility(id, request, SecurityUtils.ownerId());
     }
 
     @PutMapping("/{id}")

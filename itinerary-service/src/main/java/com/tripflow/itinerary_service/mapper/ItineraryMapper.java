@@ -2,6 +2,7 @@ package com.tripflow.itinerary_service.mapper;
 
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.model.Itinerary;
@@ -109,5 +110,35 @@ public class ItineraryMapper {
         itinerary.setVisibility(request.visibility());
         itinerary.setStartDate(request.startDate());
         itinerary.setEndDate(request.endDate());
+    }
+
+    public void updateStopEntity(UpdateItineraryStopRequest request, ItineraryStop stop) {
+        if (request.stopOrder() != null) {
+            stop.setStopOrder(request.stopOrder());
+        }
+        if (request.stopType() != null) {
+            stop.setStopType(request.stopType());
+        }
+        if (request.viaggioId() != null) {
+            stop.setViaggioId(request.viaggioId());
+        }
+        if (request.attivitaId() != null) {
+            stop.setAttivitaId(request.attivitaId());
+        }
+        if (request.customTitle() != null) {
+            stop.setCustomTitle(request.customTitle());
+        }
+        if (request.customDescription() != null) {
+            stop.setCustomDescription(request.customDescription());
+        }
+        if (request.startDatetime() != null) {
+            stop.setStartDatetime(request.startDatetime());
+        }
+        if (request.endDatetime() != null) {
+            stop.setEndDatetime(request.endDatetime());
+        }
+        if (request.notes() != null) {
+            stop.setNotes(request.notes());
+        }
     }
 }

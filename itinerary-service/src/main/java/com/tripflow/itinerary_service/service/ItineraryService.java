@@ -3,6 +3,8 @@ package com.tripflow.itinerary_service.service;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
@@ -82,6 +84,34 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(savedStop);
     }
 
+    public ItineraryStopResponse updateStop(Long itineraryId, Long stopId, UpdateItineraryStopRequest request, UUID userId) {
+        Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
+
+        ItineraryStop stop = itineraryStopRepository.findById(stopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stop not found with id: " + stopId));
+
+        if (!stop.getItinerary().getId().equals(itineraryId)) {
+            throw new ResourceNotFoundException("Stop not found in itinerary " + itineraryId);
+        }
+
+        itineraryMapper.updateStopEntity(request, stop);
+        ItineraryStop updatedStop = itineraryStopRepository.save(stop);
+        return itineraryMapper.toStopResponse(updatedStop);
+    }
+
+    public void deleteStop(Long itineraryId, Long stopId, UUID userId) {
+        Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
+
+        ItineraryStop stop = itineraryStopRepository.findById(stopId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stop not found with id: " + stopId));
+
+        if (!stop.getItinerary().getId().equals(itineraryId)) {
+            throw new ResourceNotFoundException("Stop not found in itinerary " + itineraryId);
+        }
+
+        itineraryStopRepository.delete(stop);
+    }
+
     public void deleteItinerary(Long itineraryId, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
         itineraryRepository.delete(itinerary);
@@ -90,6 +120,13 @@ public class ItineraryService {
     public ItineraryResponse updateItinerary(Long itineraryId, CreateItineraryRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         itineraryMapper.updateEntity(request, itinerary);
+        Itinerary updated = itineraryRepository.save(itinerary);
+        return itineraryMapper.toResponse(updated);
+    }
+
+    public ItineraryResponse updateVisibility(Long itineraryId, UpdateVisibilityRequest request, UUID userId) {
+        Itinerary itinerary = findOwnedItinerary(itineraryId, userId);
+        itinerary.setVisibility(request.visibility());
         Itinerary updated = itineraryRepository.save(itinerary);
         return itineraryMapper.toResponse(updated);
     }

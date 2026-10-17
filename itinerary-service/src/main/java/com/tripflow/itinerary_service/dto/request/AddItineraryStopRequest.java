@@ -1,27 +1,29 @@
 package com.tripflow.itinerary_service.dto.request;
 
-import jakarta.validation.constraints.NotBlank;
+import com.tripflow.itinerary_service.validation.DateRange;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@DateRange(startField = "startDatetime", endField = "endDatetime")
 public record AddItineraryStopRequest(
 
         @NotNull
         Integer stopOrder,
 
-        @NotBlank @Size(max = 30)
+        @NotNull @Size(max = 30)
         String stopType,
 
         UUID viaggioId,
 
         UUID attivitaId,
 
-        @NotBlank @Size(max = 150)
+        @Size(max = 150)
         String customTitle,
 
-        @NotBlank @Size(max = 150)
+        @Size(max = 150)
         String customDescription,
 
         @NotNull

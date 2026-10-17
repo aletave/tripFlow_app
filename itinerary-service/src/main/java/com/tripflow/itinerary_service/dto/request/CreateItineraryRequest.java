@@ -1,12 +1,14 @@
 package com.tripflow.itinerary_service.dto.request;
 
 import com.tripflow.itinerary_service.model.Visibility;
+import com.tripflow.itinerary_service.validation.DateRange;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+@DateRange(startField = "startDate", endField = "endDate")
 public record CreateItineraryRequest(
 
         @NotBlank

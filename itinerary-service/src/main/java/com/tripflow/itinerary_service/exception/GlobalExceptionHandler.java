@@ -30,6 +30,12 @@ public class GlobalExceptionHandler {
         return errorResponse(req, ex.getMessage());
     }
 
+    @ExceptionHandler(UserAuthServiceUnavailableException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ServiceError onUserAuthUnavailable(WebRequest req, UserAuthServiceUnavailableException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ServiceError onAccessDenied(WebRequest req, AccessDeniedException ex) {

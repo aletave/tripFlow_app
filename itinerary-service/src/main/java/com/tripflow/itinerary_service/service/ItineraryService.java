@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.service;
 
+import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
@@ -39,17 +40,20 @@ public class ItineraryService {
     private final ItineraryStopRepository itineraryStopRepository;
     private final ItineraryShareRepository itineraryShareRepository;
     private final ItineraryMapper itineraryMapper;
+    private final UserAuthClient userAuthClient;
 
     public ItineraryService(
             ItineraryRepository itineraryRepository,
             ItineraryStopRepository itineraryStopRepository,
             ItineraryShareRepository itineraryShareRepository,
-            ItineraryMapper itineraryMapper
+            ItineraryMapper itineraryMapper,
+            UserAuthClient userAuthClient
     ) {
         this.itineraryRepository = itineraryRepository;
         this.itineraryStopRepository = itineraryStopRepository;
         this.itineraryShareRepository = itineraryShareRepository;
         this.itineraryMapper = itineraryMapper;
+        this.userAuthClient = userAuthClient;
     }
 
     public ItineraryResponse createItinerary(CreateItineraryRequest request, UUID ownerId) {
@@ -161,8 +165,15 @@ public class ItineraryService {
         return itineraryMapper.toResponse(updated);
     }
 
+    @Transactional
     public ItineraryShareResponse shareItinerary(Long itineraryId, ShareItineraryRequest request, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
+
+        // Fase 1: prima di condividere verifichiamo che il destinatario esista
+        // davvero, interrogando user-auth-service. Se non esiste -> 404.
+        if (!userAuthClient.userExists(request.sharedWithUserId())) {
+            throw new ResourceNotFoundException("Utente non trovato: " + request.sharedWithUserId());
+        }
 
         if (itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(itineraryId, request.sharedWithUserId())) {
             throw new IllegalArgumentException("Itinerary already shared with this user");
@@ -174,6 +185,14 @@ public class ItineraryService {
         share.setCanEdit(request.canEdit());
 
         ItineraryShare savedShare = itineraryShareRepository.save(share);
+
+        // Fase 1: aggiungere un utente alla condivisione rende l'itinerario SHARED
+        // (qualora non lo fosse gia').
+        if (itinerary.getVisibility() != Visibility.SHARED) {
+            itinerary.setVisibility(Visibility.SHARED);
+            itineraryRepository.save(itinerary);
+        }
+
         return toShareResponse(savedShare);
     }
 

@@ -3,7 +3,9 @@ package com.tripflow.itinerary_service.controller;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.tripflow.itinerary_service.configSecurity.SecurityConfig;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
+import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.exception.ResourceNotFoundException;
+import com.tripflow.itinerary_service.exception.UserAuthServiceUnavailableException;
 import com.tripflow.itinerary_service.model.Visibility;
 import com.tripflow.itinerary_service.service.ItineraryService;
 import org.junit.jupiter.api.Test;
@@ -519,6 +521,47 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("Errore interno del server"));
+    }
+
+    @Test
+    void shareItinerary_utenteValido_200() throws Exception {
+        ItineraryShareResponse response = new ItineraryShareResponse(10L, 1L, SHARED_USER_ID, true, null);
+        when(itineraryService.shareItinerary(eq(1L), any(), eq(OWNER_ID))).thenReturn(response);
+
+        mockMvc.perform(post("/api/itineraries/1/shares")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sharedWithUserId").value(SHARED_USER_SUB))
+                .andExpect(jsonPath("$.canEdit").value(true));
+
+        verify(itineraryService).shareItinerary(eq(1L), any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void shareItinerary_utenteInesistente_404() throws Exception {
+        when(itineraryService.shareItinerary(eq(1L), any(), eq(OWNER_ID)))
+                .thenThrow(new ResourceNotFoundException("Utente non trovato: " + SHARED_USER_ID));
+
+        mockMvc.perform(post("/api/itineraries/1/shares")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Utente non trovato: " + SHARED_USER_ID));
+    }
+
+    @Test
+    void shareItinerary_servizioNonDisponibile_503() throws Exception {
+        when(itineraryService.shareItinerary(eq(1L), any(), eq(OWNER_ID)))
+                .thenThrow(new UserAuthServiceUnavailableException("user-auth-service non raggiungibile", null));
+
+        mockMvc.perform(post("/api/itineraries/1/shares")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
+                .andExpect(status().isServiceUnavailable());
     }
 
     @TestConfiguration

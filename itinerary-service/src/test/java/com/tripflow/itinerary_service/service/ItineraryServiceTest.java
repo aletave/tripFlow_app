@@ -1,8 +1,12 @@
 package com.tripflow.itinerary_service.service;
 
+import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
+import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
+import com.tripflow.itinerary_service.exception.ResourceNotFoundException;
 import com.tripflow.itinerary_service.mapper.ItineraryMapper;
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.ItineraryShare;
@@ -21,7 +25,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,11 +41,14 @@ class ItineraryServiceTest {
     private ItineraryStopRepository itineraryStopRepository;
     @Mock
     private ItineraryShareRepository itineraryShareRepository;
+    @Mock
+    private UserAuthClient userAuthClient;
 
     private ItineraryService itineraryService;
 
     private final UUID userId = UUID.fromString("70cd15d7-3a55-407c-9909-1f575e86cbfe");
     private final UUID otherOwner = UUID.fromString("99999999-9999-9999-9999-999999999999");
+    private final UUID sharedUserId = UUID.fromString("11111111-2222-3333-4444-555555555555");
 
     @BeforeEach
     void setUp() {
@@ -45,7 +56,8 @@ class ItineraryServiceTest {
                 itineraryRepository,
                 itineraryStopRepository,
                 itineraryShareRepository,
-                new ItineraryMapper()
+                new ItineraryMapper(),
+                userAuthClient
         );
     }
 
@@ -143,5 +155,64 @@ class ItineraryServiceTest {
                 1L, new UpdateVisibilityRequest(Visibility.SHARED, false), userId);
 
         assertThat(response.visibility()).isEqualTo(Visibility.SHARED);
+    }
+
+    @Test
+    void shareItinerary_utenteEsistente_impostaVisibilitaShared() {
+        Itinerary itinerary = itinerary(1L, userId, Visibility.PRIVATE);
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
+        when(userAuthClient.userExists(sharedUserId)).thenReturn(true);
+        when(itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(1L, sharedUserId)).thenReturn(false);
+        when(itineraryShareRepository.save(any(ItineraryShare.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ItineraryShareResponse response = itineraryService.shareItinerary(
+                1L, new ShareItineraryRequest(sharedUserId, true), userId);
+
+        assertThat(response.sharedWithUserId()).isEqualTo(sharedUserId);
+        assertThat(itinerary.getVisibility()).isEqualTo(Visibility.SHARED);
+        verify(itineraryRepository).save(itinerary);
+    }
+
+    @Test
+    void shareItinerary_utenteInesistente_lanciaResourceNotFound() {
+        Itinerary itinerary = itinerary(1L, userId, Visibility.PRIVATE);
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
+        when(userAuthClient.userExists(sharedUserId)).thenReturn(false);
+
+        assertThatThrownBy(() -> itineraryService.shareItinerary(
+                1L, new ShareItineraryRequest(sharedUserId, true), userId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining(sharedUserId.toString());
+
+        verify(itineraryShareRepository, never()).save(any(ItineraryShare.class));
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
+    void shareItinerary_giaCondiviso_lanciaIllegalArgument() {
+        Itinerary itinerary = itinerary(1L, userId, Visibility.SHARED);
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
+        when(userAuthClient.userExists(sharedUserId)).thenReturn(true);
+        when(itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(1L, sharedUserId)).thenReturn(true);
+
+        assertThatThrownBy(() -> itineraryService.shareItinerary(
+                1L, new ShareItineraryRequest(sharedUserId, false), userId))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
+    }
+
+    @Test
+    void shareItinerary_giaShared_nonSalvaDiNuovoLaVisibilita() {
+        Itinerary itinerary = itinerary(1L, userId, Visibility.SHARED);
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
+        when(userAuthClient.userExists(sharedUserId)).thenReturn(true);
+        when(itineraryShareRepository.existsByItineraryIdAndSharedWithUserId(1L, sharedUserId)).thenReturn(false);
+        when(itineraryShareRepository.save(any(ItineraryShare.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itineraryService.shareItinerary(1L, new ShareItineraryRequest(sharedUserId, true), userId);
+
+        assertThat(itinerary.getVisibility()).isEqualTo(Visibility.SHARED);
+        verify(itineraryRepository, never()).save(any(Itinerary.class));
     }
 }

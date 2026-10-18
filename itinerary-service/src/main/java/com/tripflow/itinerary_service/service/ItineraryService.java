@@ -19,8 +19,11 @@ import com.tripflow.itinerary_service.repository.ItineraryShareRepository;
 import com.tripflow.itinerary_service.repository.ItineraryStopRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -77,6 +80,33 @@ public class ItineraryService {
                 .toList();
     }
 
+    // Restituisce la lista globale degli itinerari accessibili all'utente:
+    // quelli posseduti (owner_id) piu' quelli condivisi con lui (itinerary_shares).
+    // La lettura avviene in un'unica transazione (readOnly) per evitare
+    // LazyInitializationException durante il mapping delle tappe.
+    @Transactional(readOnly = true)
+    public List<ItineraryResponse> getAllAccessibleItineraries(UUID userId) {
+        Map<Long, Itinerary> accessible = new LinkedHashMap<>();
+
+        itineraryRepository.findByOwnerId(userId)
+                .forEach(itinerary -> accessible.put(itinerary.getId(), itinerary));
+
+        List<Long> sharedIds = itineraryShareRepository.findBySharedWithUserId(userId)
+                .stream()
+                .map(ItineraryShare::getItineraryId)
+                .toList();
+
+        if (!sharedIds.isEmpty()) {
+            itineraryRepository.findAllById(sharedIds)
+                    .forEach(itinerary -> accessible.putIfAbsent(itinerary.getId(), itinerary));
+        }
+
+        return accessible.values()
+                .stream()
+                .map(itineraryMapper::toResponse)
+                .toList();
+    }
+
     public ItineraryStopResponse addStopToItinerary(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         ItineraryStop stop = itineraryMapper.toStopEntity(request, itinerary);
@@ -126,7 +156,7 @@ public class ItineraryService {
 
     public ItineraryResponse updateVisibility(Long itineraryId, UpdateVisibilityRequest request, UUID userId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, userId);
-        itinerary.setVisibility(request.visibility());
+        itinerary.setVisibility(request.resolvedVisibility());
         Itinerary updated = itineraryRepository.save(itinerary);
         return itineraryMapper.toResponse(updated);
     }

@@ -41,6 +41,11 @@ public class ItineraryController {
         return itineraryService.createItinerary(request, SecurityUtils.ownerId());
     }
 
+    @GetMapping
+    public List<ItineraryResponse> getAllItineraries() {
+        return itineraryService.getAllAccessibleItineraries(SecurityUtils.ownerId());
+    }
+
     @GetMapping("/{id}")
     public ItineraryResponse getItineraryById(@PathVariable Long id) {
         return itineraryService.getItineraryById(id, SecurityUtils.ownerId());

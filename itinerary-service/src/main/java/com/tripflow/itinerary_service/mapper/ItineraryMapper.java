@@ -23,7 +23,7 @@ public class ItineraryMapper {
         // Copia dati dal DTO alla entity
         itinerary.setTitle(request.title());
         itinerary.setDescription(request.description());
-        itinerary.setVisibility(request.visibility());
+        itinerary.setVisibility(request.resolvedVisibility());
         itinerary.setStartDate(request.startDate());
         itinerary.setEndDate(request.endDate());
 
@@ -107,7 +107,7 @@ public class ItineraryMapper {
     public void updateEntity(CreateItineraryRequest request, Itinerary itinerary) {
         itinerary.setTitle(request.title());
         itinerary.setDescription(request.description());
-        itinerary.setVisibility(request.visibility());
+        itinerary.setVisibility(request.resolvedVisibility());
         itinerary.setStartDate(request.startDate());
         itinerary.setEndDate(request.endDate());
     }

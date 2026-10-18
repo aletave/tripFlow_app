@@ -14,40 +14,43 @@ spring:
               enabled: true
 
           routes:
+            # Le chiamate client usano il prefisso del microservizio
+            # (es. /catalog-service/api/v1/trips): StripPrefix=1 rimuove il primo
+            # segmento e inoltra il resto (es. /api/v1/trips) al servizio corretto.
             - id: booking-service
               uri: lb://booking-service
               predicates:
                 - Path=/booking-service/**
               filters:
-                - RewritePath=/booking-service/(?<segment>.*), /${segment}
+                - StripPrefix=1
 
             - id: review-service
               uri: lb://review-service
               predicates:
                 - Path=/review-service/**
               filters:
-                - RewritePath=/review-service/(?<segment>.*), /${segment}
+                - StripPrefix=1
 
             - id: itinerary-service
               uri: lb://itinerary-service
               predicates:
                 - Path=/itinerary-service/**
               filters:
-                - RewritePath=/itinerary-service/(?<segment>.*), /${segment}
+                - StripPrefix=1
 
             - id: catalog-service
               uri: lb://catalog-service
               predicates:
                 - Path=/catalog-service/**
               filters:
-                - RewritePath=/catalog-service/(?<segment>.*), /${segment}
+                - StripPrefix=1
 
             - id: user-auth-service
               uri: lb://user-auth-service
               predicates:
                 - Path=/user-auth-service/**
               filters:
-                - RewritePath=/user-auth-service/(?<segment>.*), /${segment}
+                - StripPrefix=1
 
 eureka:
   client:
@@ -75,7 +78,7 @@ springdoc:
         url: http://localhost:8085/v3/api-docs
 
       - name: Itinerary Service
-        url: http://localhost:8082/v3/api-docs
+        url: http://localhost:8087/v3/api-docs
 
       - name: Catalog Service
         url: http://localhost:8084/v3/api-docs

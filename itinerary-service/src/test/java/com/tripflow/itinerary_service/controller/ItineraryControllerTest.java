@@ -179,6 +179,91 @@ class ItineraryControllerTest {
     }
 
     @Test
+    void getAllItineraries_restituiscePossedutiECondivisi_200() throws Exception {
+        when(itineraryService.getAllAccessibleItineraries(OWNER_ID))
+                .thenReturn(List.of(privateItinerary(), sharedItinerary()));
+
+        mockMvc.perform(get("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[1].id").value(3))
+                .andExpect(jsonPath("$[1].visibility").value("SHARED"));
+
+        verify(itineraryService).getAllAccessibleItineraries(OWNER_ID);
+    }
+
+    @Test
+    void createItinerary_conSoloIsPublic_200() throws Exception {
+        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(publicItinerary());
+
+        String body = """
+                {
+                  "title": "Solo booleano",
+                  "isPublic": true,
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-09-03"
+                }
+                """;
+
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void updateVisibility_conSoloIsPublic_200() throws Exception {
+        when(itineraryService.updateVisibility(eq(1L), any(), eq(OWNER_ID))).thenReturn(publicItinerary());
+
+        mockMvc.perform(patch("/api/itineraries/1/visibility")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"isPublic\":true}"))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).updateVisibility(eq(1L), any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void createItinerary_visibilityMinuscola_200() throws Exception {
+        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(publicItinerary());
+
+        String body = """
+                {
+                  "title": "Visibilita' minuscola",
+                  "visibility": "public",
+                  "startDate": "2026-09-01",
+                  "endDate": "2026-09-03"
+                }
+                """;
+
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
+    }
+
+    @Test
+    void updateVisibility_conVisibilityBooleana_200() throws Exception {
+        when(itineraryService.updateVisibility(eq(1L), any(), eq(OWNER_ID))).thenReturn(publicItinerary());
+
+        mockMvc.perform(patch("/api/itineraries/1/visibility")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"visibility\":true}"))
+                .andExpect(status().isOk());
+
+        verify(itineraryService).updateVisibility(eq(1L), any(), eq(OWNER_ID));
+    }
+
+    @Test
     void addStopToItinerary_owner_200() throws Exception {
         String stopBody = """
                 {

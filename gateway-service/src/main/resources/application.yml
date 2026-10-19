@@ -9,6 +9,18 @@ spring:
     gateway:
       server:
         webflux:
+          # CORS globale sull'entry point (WebFlux): consente a frontend di altri origin
+          # di chiamare le API e di leggere le specifiche dei microservizi.
+          # NB: in Spring Cloud Gateway 4.3 la property vive sotto server.webflux.
+          globalcors:
+            add-to-simple-url-handler-mapping: true
+            cors-configurations:
+              '[/**]':
+                allowedOriginPatterns: "*"
+                allowedMethods: "*"
+                allowedHeaders: "*"
+                allowCredentials: true
+
           discovery:
             locator:
               enabled: true

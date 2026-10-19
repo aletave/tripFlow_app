@@ -15,6 +15,8 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -33,6 +35,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -470,6 +473,27 @@ class ItineraryControllerTest {
     }
 
     @Test
+    void corsPreflight_daGateway_rispondeConAccessControlAllowOrigin() throws Exception {
+        mockMvc.perform(options("/api/itineraries")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:8080")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:8080"));
+    }
+
+    @Test
+    void richiestaConOrigin_daGateway_esponeAccessControlAllowOrigin() throws Exception {
+        when(itineraryService.getItinerariesByOwner(any(UUID.class))).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/itineraries/mie")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .header(HttpHeaders.ORIGIN, "http://localhost:8080"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:8080"));
+    }
+
+    @Test
     void getItineraryById_inesistente_404() throws Exception {
         when(itineraryService.getItineraryById(eq(99L), any(UUID.class)))
                 .thenThrow(new ResourceNotFoundException("Itinerary not found with id: 99"));
@@ -562,6 +586,32 @@ class ItineraryControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void shareItinerary_condivisioneDuplicata_400() throws Exception {
+        when(itineraryService.shareItinerary(eq(1L), any(), eq(OWNER_ID)))
+                .thenThrow(new IllegalArgumentException("Itinerary already shared with this user"));
+
+        mockMvc.perform(post("/api/itineraries/1/shares")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Itinerary already shared with this user"));
+    }
+
+    @Test
+    void createItinerary_violazioneVincoloDatabase_409() throws Exception {
+        when(itineraryService.createItinerary(any(), eq(OWNER_ID)))
+                .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint"));
+
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Conflitto con i dati esistenti"));
     }
 
     @TestConfiguration

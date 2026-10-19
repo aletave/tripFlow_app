@@ -3,6 +3,7 @@ package com.tripflow.itinerary_service.exception;
 import com.tripflow.itinerary_service.dto.errors.ServiceError;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -34,6 +35,22 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
     public ServiceError onUserAuthUnavailable(WebRequest req, UserAuthServiceUnavailableException ex) {
         return errorResponse(req, ex.getMessage());
+    }
+
+    // Parametri non validi a livello applicativo (es. condivisione duplicata):
+    // e' un errore del client, quindi 400 e non 500.
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onIllegalArgument(WebRequest req, IllegalArgumentException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    // Violazioni di vincoli del database (unicita', foreign key, check...):
+    // 409 Conflict. Non esponiamo i dettagli del DB al client.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ServiceError onDataIntegrityViolation(WebRequest req, DataIntegrityViolationException ex) {
+        return errorResponse(req, "Conflitto con i dati esistenti");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

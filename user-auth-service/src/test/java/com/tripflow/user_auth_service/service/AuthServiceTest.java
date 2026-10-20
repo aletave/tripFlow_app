@@ -1,12 +1,20 @@
 package com.tripflow.user_auth_service.service;
 
 import com.tripflow.user_auth_service.config.KeycloakAdminClient;
+import com.tripflow.user_auth_service.config.KeycloakAuthClient;
 import com.tripflow.user_auth_service.dto.request.ChangePasswordRequest;
+import com.tripflow.user_auth_service.dto.request.LoginRequest;
+import com.tripflow.user_auth_service.dto.request.LogoutRequest;
+import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
+import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
+import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
 import com.tripflow.user_auth_service.dto.response.RegisterResponse;
+import com.tripflow.user_auth_service.dto.response.TokenRefreshResponse;
 import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
+import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import com.tripflow.user_auth_service.model.Role;
 import com.tripflow.user_auth_service.model.User;
@@ -38,6 +46,12 @@ class AuthServiceTest {
 
     @Mock
     private KeycloakAdminClient keycloakAdminClient;
+
+    @Mock
+    private KeycloakAuthClient keycloakAuthClient;
+
+    @Mock
+    private UserEventProducer userEventProducer;
 
     @InjectMocks
     private AuthService authService;
@@ -73,6 +87,7 @@ class AuthServiceTest {
         verify(keycloakAdminClient).createUser(eq("mario.rossi@example.com"), eq("password"), eq("Mario"), eq("Rossi"),
                 eq("TRAVELER"), any());
         verify(userRepository).save(any(User.class));
+        verify(userEventProducer).publishUserRegistered(id, "kc-123", "mario.rossi@example.com", Role.TRAVELER, "Mario", "Rossi");
         verifyNoMoreInteractions(keycloakAdminClient);
     }
 
@@ -188,13 +203,15 @@ class AuthServiceTest {
 
     @Test
     void deleteMe_primaIlDbPoiKeycloak() {
-        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(utenteConId(UUID.randomUUID(), "kc-123")));
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
 
         authService.deleteMe("kc-123");
 
         InOrder ordine = inOrder(userRepository, keycloakAdminClient);
         ordine.verify(userRepository).delete(any(User.class));
         ordine.verify(keycloakAdminClient).deleteUser("kc-123");
+        verify(userEventProducer).publishUserDeleted(user.getId(), "kc-123", user.getEmail());
     }
 
     @Test
@@ -264,6 +281,84 @@ class AuthServiceTest {
 
         assertThrows(ResourceNotFoundException.class,
                 () -> authService.getPublicUserByKeycloakId("kc-inesistente"));
+    }
+
+    @Test
+    void loginFelice_restituisceTokenEProfiloUtente() {
+        LoginRequest request = new LoginRequest("Mario.Rossi@example.com", "Password123!");
+        KeycloakTokenResponse tokenResponse = new KeycloakTokenResponse(
+                "mock-access-token", 300L, 1800L, "mock-refresh-token", "Bearer", "openid");
+        User user = utenteConId(UUID.randomUUID(), "kc-123", "Mario", "Rossi", "mario.rossi@example.com", Role.TRAVELER);
+
+        when(keycloakAuthClient.login("mario.rossi@example.com", "Password123!")).thenReturn(tokenResponse);
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+
+        LoginResponse response = authService.login(request);
+
+        assertNotNull(response);
+        assertEquals("mock-access-token", response.accessToken());
+        assertEquals("mock-refresh-token", response.refreshToken());
+        assertEquals(300L, response.expiresIn());
+        assertEquals("Bearer", response.tokenType());
+        assertEquals("Mario", response.user().firstName());
+        assertEquals("mario.rossi@example.com", response.user().email());
+        assertEquals(user.getId(), response.user().id());
+    }
+
+    @Test
+    void login_credenzialiErrate_rilanciaInvalidCredentialsException() {
+        LoginRequest request = new LoginRequest("mario@example.com", "errata");
+        when(keycloakAuthClient.login("mario@example.com", "errata"))
+                .thenThrow(new InvalidCredentialsException("Email o password non validi"));
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.login(request));
+        verify(userRepository, never()).findByEmail(any());
+    }
+
+    @Test
+    void login_utenteKeycloakEsisteMaNonNelDb_404() {
+        LoginRequest request = new LoginRequest("orfano@example.com", "password");
+        KeycloakTokenResponse tokenResponse = new KeycloakTokenResponse(
+                "token", 300L, 1800L, "refresh", "Bearer", "openid");
+
+        when(keycloakAuthClient.login("orfano@example.com", "password")).thenReturn(tokenResponse);
+        when(userRepository.findByEmail("orfano@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> authService.login(request));
+    }
+
+    @Test
+    void refreshFelice_restituisceNuoviToken() {
+        RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
+        KeycloakTokenResponse tokenResponse = new KeycloakTokenResponse(
+                "new-access-token", 300L, 1800L, "new-refresh-token", "Bearer", "openid");
+
+        when(keycloakAuthClient.refreshToken("valid-refresh-token")).thenReturn(tokenResponse);
+
+        TokenRefreshResponse response = authService.refresh(request);
+
+        assertNotNull(response);
+        assertEquals("new-access-token", response.accessToken());
+        assertEquals("new-refresh-token", response.refreshToken());
+        assertEquals(300L, response.expiresIn());
+        assertEquals("Bearer", response.tokenType());
+    }
+
+    @Test
+    void refresh_tokenInvalido_rilanciaInvalidCredentialsException() {
+        RefreshTokenRequest request = new RefreshTokenRequest("scaduto");
+        when(keycloakAuthClient.refreshToken("scaduto"))
+                .thenThrow(new InvalidCredentialsException("Refresh token non valido o scaduto"));
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.refresh(request));
+    }
+
+    @Test
+    void logout_revocaTokenSuKeycloak() {
+        LogoutRequest request = new LogoutRequest("valid-refresh-token");
+        authService.logout(request);
+
+        verify(keycloakAuthClient).logout("valid-refresh-token");
     }
 
     private User utenteConId(UUID id, String keycloakId) {

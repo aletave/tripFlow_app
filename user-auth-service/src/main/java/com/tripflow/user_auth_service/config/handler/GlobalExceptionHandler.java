@@ -2,6 +2,7 @@ package com.tripflow.user_auth_service.config.handler;
 
 import com.tripflow.user_auth_service.dto.errors.ServiceError;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
+import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
@@ -44,6 +45,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ServiceError onAccessDenied(WebRequest req, AccessDeniedException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public ServiceError onInvalidCredentials(WebRequest req, InvalidCredentialsException ex) {
         return errorResponse(req, ex.getMessage());
     }
 
@@ -97,6 +104,18 @@ public class GlobalExceptionHandler {
     public ServiceError onRisorsaNonTrovata(WebRequest req, NoResourceFoundException ex) {
         //URL inesistente: prima finiva sul 500 generico, ma è un errore del client
         return errorResponse(req, "Risorsa non trovata: " + ex.getResourcePath());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onIllegalArgument(WebRequest req, IllegalArgumentException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public ServiceError onMaxUploadSizeExceeded(WebRequest req, org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return errorResponse(req, "Dimensione del file superiore al limite massimo consentito (5 MB)");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

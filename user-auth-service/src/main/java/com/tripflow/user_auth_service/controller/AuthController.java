@@ -1,17 +1,37 @@
 package com.tripflow.user_auth_service.controller;
 
+import com.tripflow.user_auth_service.config.AvatarStorageConfig;
+import com.tripflow.user_auth_service.dto.errors.ServiceError;
 import com.tripflow.user_auth_service.dto.request.ChangePasswordRequest;
+import com.tripflow.user_auth_service.dto.request.LoginRequest;
+import com.tripflow.user_auth_service.dto.request.LogoutRequest;
+import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
 import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
 import com.tripflow.user_auth_service.dto.request.UserLookupRequest;
+import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
 import com.tripflow.user_auth_service.dto.response.RegisterResponse;
+import com.tripflow.user_auth_service.dto.response.TokenRefreshResponse;
 import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.service.AuthService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,24 +42,50 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
-//Endpoint di registrazione, profilo e lookup utenti.
-//Login/refresh/logout NON esistono: avvengono direttamente su Keycloak.
+/**
+ * Controller REST per registrazione, autenticazione (proxy verso Keycloak),
+ * gestione del profilo utente e lookup utenti per altri microservizi.
+ */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Authentication & User Profile", description = "API per registrazione, autenticazione (proxy Keycloak), gestione del profilo utente e lookup")
 public class AuthController {
 
     private final AuthService authService;
+    private final AvatarStorageConfig avatarStorage;
 
-    //Registrazione: crea l'utente su Keycloak e sul DB locale.
-    //Il client prosegue poi col login diretto su Keycloak (requiresLogin=true).
+    @Value("${app.upload.dir:uploads/avatars}")
+    private String uploadDir;
+
+    @Value("${app.base-url:http://localhost:8086}")
+    private String baseUrl;
+
+    @Operation(summary = "Registrazione nuovo utente",
+            description = "Crea l'account su Keycloak con le credenziali fornite e memorizza il profilo applicativo su DB. Pubblica l'evento USER_REGISTERED su RabbitMQ.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Utente registrato con successo"),
+            @ApiResponse(responseCode = "400", description = "Dati di registrazione non validi",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "409", description = "Email già registrata",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "429", description = "Troppe richieste (Rate limit superato)",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public RegisterResponse register(@Valid @RequestBody RegisterRequest request) {
@@ -47,13 +93,83 @@ public class AuthController {
         return authService.register(request);
     }
 
-    //Profilo dell'utente autenticato: il "sub" del JWT Keycloak è il keycloak_id.
+    @Operation(summary = "Login utente",
+            description = "Autentica l'utente tramite Keycloak (Direct Access Grants) e restituisce access token, refresh token e il profilo utente completo.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Autenticazione riuscita"),
+            @ApiResponse(responseCode = "400", description = "Richiesta non valida / campi mancanti",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Credenziali non valide",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Profilo utente locale non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "429", description = "Troppe richieste (Rate limit superato)",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/login")
+    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
+        log.info("Richiesta di login per email={}", request.email());
+        return ResponseEntity.ok(authService.login(request));
+    }
+
+    @Operation(summary = "Rinnovo access token",
+            description = "Rinnova l'access token scaduto scambiando un refresh token valido rilasciato in precedenza da Keycloak.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Token rinnovato con successo"),
+            @ApiResponse(responseCode = "400", description = "Richiesta non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Refresh token scaduto o non valido",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenRefreshResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        return ResponseEntity.ok(authService.refresh(request));
+    }
+
+    @Operation(summary = "Logout utente",
+            description = "Revoca il refresh token tramite l'endpoint standard di revoca RFC 7009 su Keycloak.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Logout eseguito con successo"),
+            @ApiResponse(responseCode = "400", description = "Richiesta non valida / token mancante",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "500", description = "Errore durante la revoca del token",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ResponseEntity<Void> logout(@Valid @RequestBody LogoutRequest request) {
+        log.info("Richiesta di logout e revoca token");
+        authService.logout(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Profilo dell'utente autenticato",
+            description = "Restituisce i dati anagrafici e di contatto dell'utente attualmente autenticato (individuato dal claim 'sub' del JWT).",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Profilo recuperato con successo"),
+            @ApiResponse(responseCode = "401", description = "Non autenticato o token non valido",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Profilo utente non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getMe(@AuthenticationPrincipal Jwt jwt) {
         return ResponseEntity.ok(authService.getMe(jwt.getSubject()));
     }
 
-    //Aggiornamento del profilo dell'utente autenticato.
+    @Operation(summary = "Aggiornamento profilo utente",
+            description = "Aggiorna i dati del profilo dell'utente autenticato e notifica l'evento USER_UPDATED su RabbitMQ.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Profilo aggiornato con successo"),
+            @ApiResponse(responseCode = "400", description = "Dati del profilo non validi",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Utente non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @PutMapping("/me")
     public ResponseEntity<UserResponse> updateMe(
             @Valid @RequestBody UpdateProfileRequest request,
@@ -62,7 +178,16 @@ public class AuthController {
         return ResponseEntity.ok(authService.updateProfile(jwt.getSubject(), request));
     }
 
-    //Cambio password: la nuova password viene impostata solo su Keycloak.
+    @Operation(summary = "Cambio password",
+            description = "Aggiorna la password dell'utente autenticato su Keycloak.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Password modificata con successo"),
+            @ApiResponse(responseCode = "400", description = "Password non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @PutMapping("/me/password")
     public ResponseEntity<Void> changePassword(
             @Valid @RequestBody ChangePasswordRequest request,
@@ -72,27 +197,124 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    //Eliminazione dell'account: rimuove l'utente da Keycloak e dal DB locale.
+    @Operation(summary = "Caricamento avatar",
+            description = "Carica una nuova immagine del profilo, elimina il file precedente e aggiorna il profilo con la nuova URL.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Immagine caricata con successo"),
+            @ApiResponse(responseCode = "400", description = "File non valido o formato non supportato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, String>> uploadAvatar(
+            @Parameter(description = "File immagine (JPEG, PNG, WebP)")
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal Jwt jwt
+    ) throws IOException {
+        UserResponse current = authService.getMe(jwt.getSubject());
+        String oldImage = current.profileImage();
+
+        String filename = avatarStorage.salva(file);
+        String url = baseUrl + "/api/auth/avatars/" + filename;
+
+        authService.updateProfileImage(jwt.getSubject(), url);
+        avatarStorage.elimina(oldImage);
+
+        log.info("Avatar aggiornato per keycloak_id={}: {}", jwt.getSubject(), url);
+        return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    @Operation(summary = "Serving immagine profilo",
+            description = "Restituisce l'immagine avatar dal disco locale (endpoint pubblico).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "File immagine restituito"),
+            @ApiResponse(responseCode = "404", description = "File non trovato")
+    })
+    @GetMapping("/avatars/{filename}")
+    public ResponseEntity<Resource> serveAvatar(
+            @Parameter(description = "Nome file dell'avatar salvato")
+            @PathVariable String filename
+    ) {
+        try {
+            Path file = Paths.get(uploadDir).resolve(filename).normalize();
+            Resource resource = new UrlResource(file.toUri());
+            if (!resource.exists() || !resource.isReadable()) {
+                return ResponseEntity.notFound().build();
+            }
+            String contentType = filename.endsWith(".png") ? "image/png"
+                    : filename.endsWith(".webp") ? "image/webp"
+                    : "image/jpeg";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(HttpHeaders.CACHE_CONTROL, "max-age=86400")
+                    .body(resource);
+        } catch (MalformedURLException e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @Operation(summary = "Eliminazione account",
+            description = "Elimina l'account utente dal database locale e da Keycloak, e notifica l'evento USER_DELETED su RabbitMQ.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Account eliminato con successo"),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @DeleteMapping("/me")
     public ResponseEntity<Void> deleteMe(@AuthenticationPrincipal Jwt jwt) {
         authService.deleteMe(jwt.getSubject());
         return ResponseEntity.noContent().build();
     }
 
-    //Profilo pubblico di un utente per keycloak_id (il "sub" del JWT Keycloak):
-    //gli altri servizi salvano viaggiatore_id = sub, quindi risolvono i nomi qui.
+    @Operation(summary = "Profilo pubblico per Keycloak ID",
+            description = "Restituisce i dati pubblici essenziali (id, nome, cognome, ruolo, avatar) cercati per Keycloak ID (claim 'sub').",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Profilo pubblico recuperato"),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Utente non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @GetMapping("/users/by-keycloak/{keycloakId}")
-    public ResponseEntity<PublicUserResponse> getPublicUserByKeycloakId(@PathVariable String keycloakId) {
+    public ResponseEntity<PublicUserResponse> getPublicUserByKeycloakId(
+            @Parameter(description = "Identificativo Keycloak (sub)")
+            @PathVariable String keycloakId
+    ) {
         return ResponseEntity.ok(authService.getPublicUserByKeycloakId(keycloakId));
     }
 
-    //Profilo pubblico di un utente per id (dati minimi: nessuna email/telefono).
+    @Operation(summary = "Profilo pubblico per ID utente",
+            description = "Restituisce i dati pubblici essenziali cercati tramite UUID locale.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Profilo pubblico recuperato"),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Utente non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @GetMapping("/users/{id}")
-    public ResponseEntity<PublicUserResponse> getPublicUser(@PathVariable UUID id) {
+    public ResponseEntity<PublicUserResponse> getPublicUser(
+            @Parameter(description = "UUID del record utente")
+            @PathVariable UUID id
+    ) {
         return ResponseEntity.ok(authService.getPublicUserById(id));
     }
 
-    //Profilo pubblico di più utenti per lista di email.
+    @Operation(summary = "Lookup batch profili pubblici per email",
+            description = "Restituisce l'elenco dei profili pubblici corrispondenti a una lista di indirizzi email. Utilizzato da altri servizi per mostrare nomi e avatar di autori.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista profili pubblici restituita"),
+            @ApiResponse(responseCode = "400", description = "Richiesta di lookup non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
     @PostMapping("/users/lookup")
     public ResponseEntity<List<PublicUserResponse>> lookupUsers(
             @Valid @RequestBody UserLookupRequest request

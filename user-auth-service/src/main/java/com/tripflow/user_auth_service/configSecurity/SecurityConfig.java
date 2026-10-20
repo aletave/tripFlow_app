@@ -57,8 +57,15 @@ public class SecurityConfig {
                         ).permitAll()
                         // Health check per eureka / container
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // Registrazione: pubblica (il login avviene direttamente su Keycloak)
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        // Endpoint pubblici: registrazione, login proxy, refresh token e logout
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/register",
+                                "/api/auth/login",
+                                "/api/auth/refresh",
+                                "/api/auth/logout"
+                        ).permitAll()
+                        // Avatar: serving pubblico (l'app mostra immagini senza token)
+                        .requestMatchers(HttpMethod.GET, "/api/auth/avatars/**").permitAll()
                         // Tutto il resto (profilo e lookup utenti) richiede un JWT valido.
                         // NB: i lookup espongono dati personali di terzi, quindi restano autenticati
                         // (niente user enumeration sui nomi/email registrati).

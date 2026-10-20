@@ -57,12 +57,13 @@ public class SecurityConfig {
                         ).permitAll()
                         // Health check per eureka / container
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // Endpoint pubblici: registrazione, login proxy, refresh token e logout
+                        // Endpoint pubblici: registrazione, login proxy, refresh token, logout e recupero password
                         .requestMatchers(HttpMethod.POST,
                                 "/api/auth/register",
                                 "/api/auth/login",
                                 "/api/auth/refresh",
-                                "/api/auth/logout"
+                                "/api/auth/logout",
+                                "/api/auth/forgot-password"
                         ).permitAll()
                         // Avatar: serving pubblico (l'app mostra immagini senza token)
                         .requestMatchers(HttpMethod.GET, "/api/auth/avatars/**").permitAll()

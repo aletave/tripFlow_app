@@ -3,12 +3,14 @@ package com.tripflow.user_auth_service.controller;
 import com.tripflow.user_auth_service.config.AvatarStorageConfig;
 import com.tripflow.user_auth_service.dto.errors.ServiceError;
 import com.tripflow.user_auth_service.dto.request.ChangePasswordRequest;
+import com.tripflow.user_auth_service.dto.request.ForgotPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.LoginRequest;
 import com.tripflow.user_auth_service.dto.request.LogoutRequest;
 import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
 import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
 import com.tripflow.user_auth_service.dto.request.UserLookupRequest;
+import com.tripflow.user_auth_service.dto.request.UserLookupByKeycloakIdsRequest;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
 import com.tripflow.user_auth_service.dto.response.RegisterResponse;
@@ -217,7 +219,11 @@ public class AuthController {
         String oldImage = current.profileImage();
 
         String filename = avatarStorage.salva(file);
-        String url = baseUrl + "/api/auth/avatars/" + filename;
+        // FIX: URL relativa al Gateway — evita che Android (o Docker) riceva un URL
+        // con localhost:8086 che punta a se stesso invece che al backend.
+        // Il client concatena la baseUrl del Gateway (es. http://10.0.2.2:8080)
+        // + /user-auth-service/api/auth/avatars/{filename}.
+        String url = "/user-auth-service/api/auth/avatars/" + filename;
 
         authService.updateProfileImage(jwt.getSubject(), url);
         avatarStorage.elimina(oldImage);
@@ -320,5 +326,38 @@ public class AuthController {
             @Valid @RequestBody UserLookupRequest request
     ) {
         return ResponseEntity.ok(authService.lookupByEmails(request.emails()));
+    }
+
+    @Operation(summary = "Lookup batch profili pubblici per Keycloak ID (sub del JWT)",
+            description = "Risolve in un colpo solo i profili pubblici di una lista di Keycloak ID. " +
+                    "Utilizzato dai microservizi che salvano il sub del JWT (es. booking, review) " +
+                    "per eliminare il problema N+1 nelle schermate con liste di autori.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista profili pubblici restituita"),
+            @ApiResponse(responseCode = "400", description = "Richiesta non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/users/lookup-by-ids")
+    public ResponseEntity<List<PublicUserResponse>> lookupUsersByKeycloakIds(
+            @Valid @RequestBody UserLookupByKeycloakIdsRequest request
+    ) {
+        return ResponseEntity.ok(authService.lookupByKeycloakIds(request.keycloakIds()));
+    }
+
+    @Operation(summary = "Recupero password dimenticata",
+            description = "Invia una mail con il link di reset password tramite Keycloak (server SMTP configurato nel realm). " +
+                    "Per sicurezza risponde sempre 202 Accepted, indipendentemente dal fatto che l'email esista.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Richiesta accettata (la mail è inviata se l'email esiste)"),
+            @ApiResponse(responseCode = "400", description = "Email non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request);
+        return ResponseEntity.accepted().build();
     }
 }

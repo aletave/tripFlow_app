@@ -3,6 +3,7 @@ package com.tripflow.user_auth_service.service;
 import com.tripflow.user_auth_service.config.KeycloakAdminClient;
 import com.tripflow.user_auth_service.config.KeycloakAuthClient;
 import com.tripflow.user_auth_service.dto.request.ChangePasswordRequest;
+import com.tripflow.user_auth_service.dto.request.ForgotPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.LoginRequest;
 import com.tripflow.user_auth_service.dto.request.LogoutRequest;
 import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
@@ -15,6 +16,7 @@ import com.tripflow.user_auth_service.dto.response.RegisterResponse;
 import com.tripflow.user_auth_service.dto.response.TokenRefreshResponse;
 import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
+import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import com.tripflow.user_auth_service.model.User;
 import com.tripflow.user_auth_service.repository.UserRepository;
@@ -198,6 +200,40 @@ public class AuthService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Utente non trovato: " + id));
         return toPublicUserResponse(user);
+    }
+
+    //Lookup batch per Keycloak ID (il "sub" del JWT): usato dai microservizi per risolvere
+    //in un colpo solo tutti gli autori di una lista di prenotazioni/recensioni/itinerari.
+    //Sostituisce le N chiamate singole a /users/by-keycloak/{id} (problema N+1).
+    public List<PublicUserResponse> lookupByKeycloakIds(List<String> keycloakIds) {
+        List<String> idsFiltrati = keycloakIds.stream()
+                .filter(id -> id != null && !id.isBlank())
+                .distinct()
+                .toList();
+        if (idsFiltrati.isEmpty()) {
+            return List.of();
+        }
+        return userRepository.findByKeycloakIdIn(idsFiltrati)
+                .stream()
+                .map(this::toPublicUserResponse)
+                .toList();
+    }
+
+    //Recupero password: cerca l'utente per email e chiede a Keycloak di inviare
+    //la mail di reset (tramite il server SMTP configurato nel realm, es. Mailpit in sviluppo).
+    //Per sicurezza non rivela se l'email esiste o no (niente user enumeration): risponde
+    //sempre con successo anche se l'email non è registrata.
+    public void forgotPassword(ForgotPasswordRequest request) {
+        String email = request.email().toLowerCase(Locale.ROOT);
+        userRepository.findByEmail(email).ifPresent(user -> {
+            try {
+                keycloakAdminClient.sendResetPasswordEmail(user.getKeycloakId());
+                log.info("Email di recupero password inviata per email={}", email);
+            } catch (RuntimeException e) {
+                log.error("Errore durante l'invio della mail di recupero password per email={}", email, e);
+                //non propaghiamo: la risposta al client è sempre 202 per sicurezza
+            }
+        });
     }
 
     //Recupero dei profili pubblici per lista di email: usato dagli altri servizi/app

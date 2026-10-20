@@ -128,6 +128,22 @@ public class KeycloakAdminClient {
         }
     }
 
+    //Recupero password: invia una email con il link di reset tramite Keycloak (via SMTP configurato nel realm).
+    //Usa executeActionsEmail con l'azione UPDATE_PASSWORD: Keycloak genera un token temporaneo sicuro
+    //e invia la mail al server SMTP configurato nelle impostazioni del realm (es. Mailpit in sviluppo).
+    public void sendResetPasswordEmail(String keycloakId) {
+        try {
+            getInstance().realm(realmName)
+                    .users()
+                    .get(keycloakId)
+                    .executeActionsEmail(List.of("UPDATE_PASSWORD"));
+            log.info("Email di recupero password inviata per keycloak_id={}", keycloakId);
+        } catch (Exception e) {
+            log.error("Errore durante l'invio della mail di recupero password per {}", keycloakId, e);
+            throw new KeycloakOperationException("Errore durante l'invio della mail di recupero password", e);
+        }
+    }
+
     //Istanza admin: singleton thread-safe.
     //Usa client_credentials se e' fornito un clientSecret, altrimenti fallback su password admin (master).
     private volatile Keycloak istanza;

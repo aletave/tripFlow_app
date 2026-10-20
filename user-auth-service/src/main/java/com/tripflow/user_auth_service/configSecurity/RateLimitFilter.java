@@ -23,6 +23,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final int MAX_TRACKED_IPS = 1000;
     private static final String REGISTER_PATH = "/api/auth/register";
     private static final String LOGIN_PATH = "/api/auth/login";
+    private static final String REFRESH_PATH = "/api/auth/refresh";
+    private static final String FORGOT_PASSWORD_PATH = "/api/auth/forgot-password";
 
     private final boolean enabled;
     private final int maxRequestsPerWindow;
@@ -40,7 +42,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        boolean isProtectedEndpoint = REGISTER_PATH.equals(request.getRequestURI()) || LOGIN_PATH.equals(request.getRequestURI());
+        String uri = request.getRequestURI();
+        boolean isProtectedEndpoint = REGISTER_PATH.equals(uri)
+                || LOGIN_PATH.equals(uri)
+                || REFRESH_PATH.equals(uri)
+                || FORGOT_PASSWORD_PATH.equals(uri);
         if (!enabled || !"POST".equalsIgnoreCase(request.getMethod()) || !isProtectedEndpoint) {
             filterChain.doFilter(request, response);
             return;

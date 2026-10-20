@@ -26,6 +26,17 @@ services:
       - RABBITMQ_DEFAULT_PASS=guest
     restart: unless-stopped
 
+  #MAILPIT: fake SMTP server per sviluppo locale.
+  #Keycloak invia le email di recupero password a mailpit:1025 (SMTP).
+  #Puoi leggere le email ricevute aprendo http://localhost:8025 nel browser.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: mailpit
+    ports:
+      - "1025:1025" # Porta SMTP su cui Keycloak invia le email
+      - "8025:8025" # Web UI per leggere le email intercettate
+    restart: unless-stopped
+
   #KEYCLOAK:
   postgres-keycloak:
     image: postgres:15
@@ -58,6 +69,7 @@ services:
       - "9090:8080"
     depends_on:
       - postgres-keycloak
+      - mailpit
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
     mem_limit: 1g

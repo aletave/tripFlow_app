@@ -1,6 +1,15 @@
 {
   "realm": "tripflow",
   "enabled": true,
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "noreply@tripflow.com",
+    "fromDisplayName": "TripFlow",
+    "ssl": "false",
+    "starttls": "false",
+    "auth": "false"
+  },
   "roles": {
     "realm": [
       { "name": "TRAVELER", "description": "Utente che prenota viaggi" },

@@ -74,6 +74,76 @@ services:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
     mem_limit: 1g
 
+  discovery-service:
+    build: ./discovery-service
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8761/eureka/apps"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  gateway-service:
+    build: ./gateway-service
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+  booking-service:
+    build: ./booking-service
+    container_name: booking-service
+    ports:
+      - "8083:8083"
+    env_file:
+      - path: ./booking-service/.env.stripe
+        required: false
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_booking_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-whsec_PLACEHOLDER}
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+
+  review-service:
+    build: ./review-service
+    container_name: review-service
+    ports:
+      - "8085:8085"
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_review_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgresql_data:
   postgres_keycloak_data:

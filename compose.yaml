@@ -142,6 +142,69 @@ services:
         condition: service_started
       keycloak:
         condition: service_started
+  user-auth-service:
+    build: ./user-auth-service
+    container_name: user-auth-service
+    ports:
+      - "8086:8086"
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_user_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      keycloak:
+        condition: service_started
+  catalog-service:
+    build: ./catalog-service
+    container_name: catalog-service
+    ports:
+      - "8084:8084"
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_catalog_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+
+  itinerary-service:
+    build: ./itinerary-service
+    container_name: itinerary-service
+    ports:
+      - "8087:8087"
+    environment:
+      EUREKA_URL: http://discovery-service:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
+      USER_AUTH_SERVICE_URL: http://user-auth-service:8086
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      postgresql:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+      keycloak:
+        condition: service_started
+      user-auth-service:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

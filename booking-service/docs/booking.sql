@@ -65,6 +65,8 @@ CREATE TABLE pagamento (
     prenotazione_id UUID NOT NULL,
 
     importo NUMERIC(10,2) NOT NULL,
+    importo_originale NUMERIC(10,2),
+    codice_sconto VARCHAR(50),
     metodo VARCHAR(20),
     stato VARCHAR(20) NOT NULL,
 

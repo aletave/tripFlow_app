@@ -16,6 +16,8 @@ public class PagamentoResponse {
 
     private UUID id;
     private BigDecimal importo;
+    private BigDecimal importoOriginale;
+    private String codiceSconto;
     private MetodoPagamento metodo;
     private StatoPagamento stato;
 

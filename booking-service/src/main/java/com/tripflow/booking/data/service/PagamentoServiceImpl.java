@@ -25,9 +25,12 @@ import com.tripflow.booking.exception.PagamentoNotFoundException;
 import com.tripflow.booking.exception.PagamentoEsistenteException;
 import com.tripflow.booking.exception.StatoPrenotazioneException;
 import com.tripflow.booking.exception.StatoPagamentoException;
+import com.tripflow.booking.exception.CodiceScontoNonValidoException;
 import org.springframework.security.access.AccessDeniedException;
 
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,7 +51,8 @@ public class PagamentoServiceImpl implements PagamentoService {
 
     @Override
     public PagamentoIntentResponse avviaPagamento(UUID prenotazioneId,
-                                                  UUID viaggiatoreId) {
+                                                  UUID viaggiatoreId,
+                                                  String codiceSconto) {
 
         Prenotazione prenotazione = prenotazioneRepository.findById(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
@@ -71,6 +75,7 @@ public class PagamentoServiceImpl implements PagamentoService {
                             " e' scaduta il " + prenotazione.getScadenzaIl());
         }
 
+        ImportoDaPagare importo = calcolaImporto(prenotazione, viaggiatoreId, codiceSconto);
 
         Optional<Pagamento> trova_esistente = pagamentoRepository.findByPrenotazioneId(prenotazioneId);
         if (trova_esistente.isPresent()) {
@@ -83,7 +88,7 @@ public class PagamentoServiceImpl implements PagamentoService {
             }
             PaymentIntent intentEsistente = stripeService.recuperaPaymentIntent(esistente.getStripePaymentIntentId());
             if (!"canceled".equals(intentEsistente.getStatus())) {
-                return riprendiPagamento(esistente, intentEsistente);
+                return riprendiPagamento(esistente, intentEsistente, importo);
             }
         }
 
@@ -93,40 +98,35 @@ public class PagamentoServiceImpl implements PagamentoService {
         }
 
         PaymentIntent paymentIntent =
-                stripeService.creaPaymentIntent(prenotazione.getPrezzoTotale(), prenotazioneId);
+                stripeService.creaPaymentIntent(importo.finale(), prenotazioneId, importo.codiceSconto());
 
 
         Pagamento pagamento;
         if (trova_esistente.isPresent()) {
             pagamento = trova_esistente.get();
             pagamento.setStato(StatoPagamento.IN_ATTESA);
-            pagamento.setImporto(prenotazione.getPrezzoTotale());
             pagamento.setStripePaymentIntentId(paymentIntent.getId());
             log.info("Ritento pagamento fallito {} per prenotazione {}",
                     pagamento.getId(), prenotazioneId);
         } else {
             pagamento = Pagamento.builder()
                     .prenotazione(prenotazione)
-                    .importo(prenotazione.getPrezzoTotale())
                     .stato(StatoPagamento.IN_ATTESA)
                     .stripePaymentIntentId(paymentIntent.getId())
                     .build();
         }
+        applicaImporto(pagamento, importo);
 
         Pagamento saved = pagamentoRepository.save(pagamento);
 
-        log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, paymentIntent={}",
-                saved.getId(), prenotazioneId, saved.getImporto(), paymentIntent.getId());
+        log.info("Pagamento avviato: id={}, prenotazione={}, importo={}, codiceSconto={}, paymentIntent={}",
+                saved.getId(), prenotazioneId, saved.getImporto(), saved.getCodiceSconto(), paymentIntent.getId());
 
-        return PagamentoIntentResponse.builder()
-                .pagamentoId(saved.getId())
-                .clientSecret(paymentIntent.getClientSecret())
-                .importo(saved.getImporto())
-                .publishableKey(stripeService.getPublishableKey())
-                .build();
+        return costruisciIntentResponse(saved, paymentIntent);
     }
 
-    private PagamentoIntentResponse riprendiPagamento(Pagamento pagamento, PaymentIntent paymentIntent) {
+    private PagamentoIntentResponse riprendiPagamento(Pagamento pagamento, PaymentIntent paymentIntent,
+                                                      ImportoDaPagare importo) {
         String statoStripe = paymentIntent.getStatus();
         boolean daCompletare = "requires_payment_method".equals(statoStripe)
                 || "requires_action".equals(statoStripe);
@@ -135,19 +135,74 @@ public class PagamentoServiceImpl implements PagamentoService {
                     "Pagamento già in elaborazione per la prenotazione " + pagamento.getPrenotazione().getId());
         }
 
-        if (pagamento.getStato() == StatoPagamento.FALLITO) {
-            pagamento.setStato(StatoPagamento.IN_ATTESA);
-            pagamentoRepository.save(pagamento);
+        boolean importoCambiato = pagamento.getImporto().compareTo(importo.finale()) != 0;
+        if (importoCambiato) {
+            if (!"requires_payment_method".equals(statoStripe)) {
+                throw new PagamentoEsistenteException(
+                        "Pagamento già in corso per la prenotazione " + pagamento.getPrenotazione().getId()
+                                + ": impossibile modificare il codice sconto");
+            }
+            paymentIntent = stripeService.aggiornaImportoPaymentIntent(
+                    paymentIntent.getId(), importo.finale(), importo.codiceSconto());
+            log.info("Aggiornato importo del pagamento {} da {} a {} (codiceSconto={})",
+                    pagamento.getId(), pagamento.getImporto(), importo.finale(), importo.codiceSconto());
         }
 
-        log.info("Ripreso pagamento {} con PaymentIntent {}", pagamento.getId(), paymentIntent.getId());
+        applicaImporto(pagamento, importo);
+        if (pagamento.getStato() == StatoPagamento.FALLITO) {
+            pagamento.setStato(StatoPagamento.IN_ATTESA);
+        }
+        Pagamento saved = pagamentoRepository.save(pagamento);
 
+        log.info("Ripreso pagamento {} con PaymentIntent {}", saved.getId(), paymentIntent.getId());
+
+        return costruisciIntentResponse(saved, paymentIntent);
+    }
+
+    private ImportoDaPagare calcolaImporto(Prenotazione prenotazione, UUID viaggiatoreId, String codiceSconto) {
+        BigDecimal prezzoPieno = prenotazione.getPrezzoTotale();
+        if (codiceSconto == null || codiceSconto.isBlank()) {
+            return new ImportoDaPagare(prezzoPieno, null, null);
+        }
+
+        StripeService.CodiceSconto sconto = stripeService.recuperaCodiceSconto(codiceSconto.trim());
+
+        boolean giaUsato = pagamentoRepository.codiceGiaUsatoDaViaggiatore(
+                sconto.codice(), viaggiatoreId, prenotazione.getId(), LocalDateTime.now());
+        if (giaUsato) {
+            log.warn("Codice sconto {} già utilizzato dal viaggiatore {}", sconto.codice(), viaggiatoreId);
+            throw new CodiceScontoNonValidoException("Hai già utilizzato il codice sconto " + sconto.codice());
+        }
+
+        BigDecimal riduzione = prezzoPieno
+                .multiply(sconto.percentuale())
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+        BigDecimal finale = prezzoPieno.subtract(riduzione);
+
+        log.info("Codice sconto {} ({}%) applicato alla prenotazione {}: {} -> {}",
+                sconto.codice(), sconto.percentuale(), prenotazione.getId(), prezzoPieno, finale);
+
+        return new ImportoDaPagare(finale, prezzoPieno, sconto.codice());
+    }
+
+    private void applicaImporto(Pagamento pagamento, ImportoDaPagare importo) {
+        pagamento.setImporto(importo.finale());
+        pagamento.setImportoOriginale(importo.originale());
+        pagamento.setCodiceSconto(importo.codiceSconto());
+    }
+
+    private PagamentoIntentResponse costruisciIntentResponse(Pagamento pagamento, PaymentIntent paymentIntent) {
         return PagamentoIntentResponse.builder()
                 .pagamentoId(pagamento.getId())
                 .clientSecret(paymentIntent.getClientSecret())
                 .importo(pagamento.getImporto())
+                .importoOriginale(pagamento.getImportoOriginale())
+                .codiceSconto(pagamento.getCodiceSconto())
                 .publishableKey(stripeService.getPublishableKey())
                 .build();
+    }
+
+    private record ImportoDaPagare(BigDecimal finale, BigDecimal originale, String codiceSconto) {
     }
 
     @Override

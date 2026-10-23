@@ -14,5 +14,7 @@ public class PagamentoIntentResponse {
     private UUID pagamentoId;
     private String clientSecret;
     private BigDecimal importo;
+    private BigDecimal importoOriginale;
+    private String codiceSconto;
     private String publishableKey;
 }

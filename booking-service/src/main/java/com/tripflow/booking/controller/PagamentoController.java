@@ -2,12 +2,14 @@ package com.tripflow.booking.controller;
 
 import com.stripe.model.Event;
 import com.tripflow.booking.configSecurity.SecurityUtils;
+import com.tripflow.booking.data.dto.requests.AvviaPagamentoRequest;
 import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
 import com.tripflow.booking.data.dto.responses.PagamentoResponse;
 import com.tripflow.booking.data.service.PagamentoService;
 import com.tripflow.booking.data.service.StripeService;
 import com.tripflow.booking.exception.BookingException;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -36,8 +38,13 @@ public class PagamentoController {
 
     @PostMapping("/{prenotazioneId}")
     @ResponseStatus(HttpStatus.CREATED)
-    public PagamentoIntentResponse avvia(@PathVariable UUID prenotazioneId) {
-        return pagamentoService.avviaPagamento(prenotazioneId, SecurityUtils.viaggiatoreId());
+    public PagamentoIntentResponse avvia(@PathVariable UUID prenotazioneId,
+                                         @Valid @RequestBody(required = false) AvviaPagamentoRequest request) {
+        String codiceSconto = null;
+        if (request != null){
+            codiceSconto = request.getCodiceSconto();
+        }
+        return pagamentoService.avviaPagamento(prenotazioneId, SecurityUtils.viaggiatoreId(), codiceSconto);
     }
 
     @GetMapping("/{prenotazioneId}")

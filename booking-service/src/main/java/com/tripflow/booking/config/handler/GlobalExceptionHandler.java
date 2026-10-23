@@ -3,6 +3,7 @@ package com.tripflow.booking.config.handler;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.tripflow.booking.data.dto.errors.ServiceError;
 import com.tripflow.booking.exception.BookingException;
+import com.tripflow.booking.exception.CodiceScontoNonValidoException;
 import com.tripflow.booking.exception.ServizioNonDisponibileException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -44,6 +45,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ServiceError onAccessDenied(WebRequest req, AccessDeniedException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(CodiceScontoNonValidoException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onCodiceScontoNonValido(WebRequest req, CodiceScontoNonValidoException ex) {
         return errorResponse(req, ex.getMessage());
     }
 

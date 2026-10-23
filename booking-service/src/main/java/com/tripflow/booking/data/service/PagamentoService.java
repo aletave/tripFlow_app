@@ -7,7 +7,7 @@ import java.util.UUID;
 
 public interface PagamentoService {
 
-    PagamentoIntentResponse avviaPagamento(UUID prenotazioneId, UUID viaggiatoreId);
+    PagamentoIntentResponse avviaPagamento(UUID prenotazioneId, UUID viaggiatoreId, String codiceSconto);
     PagamentoResponse trovaPagamento(UUID prenotazioneId, UUID viaggiatoreId);
 
     //stripe (chiamati dal webhook controller)

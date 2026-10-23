@@ -170,7 +170,9 @@ services:
         condition: service_started
     restart: unless-stopped
   catalog-service:
-    build: ./catalog-service
+    build:
+      context: .
+      dockerfile: catalog-service/Dockerfile
     container_name: catalog-service
     ports:
       - "8084:8084"

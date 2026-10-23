@@ -44,6 +44,12 @@ public class Pagamento {
     @Column(name = "importo", nullable = false, precision = 10, scale = 2)
     private BigDecimal importo;
 
+    @Column(name = "importo_originale", precision = 10, scale = 2)
+    private BigDecimal importoOriginale;
+
+    @Column(name = "codice_sconto", length = 50)
+    private String codiceSconto;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "metodo", nullable = true, length = 20)
     private MetodoPagamento metodo;

@@ -13,6 +13,8 @@ public final class PagamentoMapper {
         return PagamentoResponse.builder()
                 .id(p.getId())
                 .importo(p.getImporto())
+                .importoOriginale(p.getImportoOriginale())
+                .codiceSconto(p.getCodiceSconto())
                 .metodo(p.getMetodo())
                 .stato(p.getStato())
                 .stripePaymentIntentId(p.getStripePaymentIntentId())

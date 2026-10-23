@@ -63,7 +63,10 @@ public class SecurityConfig {
                                 "/api/auth/login",
                                 "/api/auth/refresh",
                                 "/api/auth/logout",
-                                "/api/auth/forgot-password"
+                                "/api/auth/forgot-password",
+                                "/api/auth/reset-password",
+                                "/api/auth/verify-email",
+                                "/api/auth/resend-verification"
                         ).permitAll()
                         // Avatar: serving pubblico (l'app mostra immagini senza token)
                         .requestMatchers(HttpMethod.GET, "/api/auth/avatars/**").permitAll()

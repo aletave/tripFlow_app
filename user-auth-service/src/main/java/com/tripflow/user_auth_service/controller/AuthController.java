@@ -8,7 +8,10 @@ import com.tripflow.user_auth_service.dto.request.LoginRequest;
 import com.tripflow.user_auth_service.dto.request.LogoutRequest;
 import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
+import com.tripflow.user_auth_service.dto.request.ResendVerificationRequest;
+import com.tripflow.user_auth_service.dto.request.ResetPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
+import com.tripflow.user_auth_service.dto.request.VerifyEmailRequest;
 import com.tripflow.user_auth_service.dto.request.UserLookupRequest;
 import com.tripflow.user_auth_service.dto.request.UserLookupByKeycloakIdsRequest;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
@@ -358,6 +361,49 @@ public class AuthController {
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         authService.forgotPassword(request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @Operation(summary = "Reset password con codice OTP",
+            description = "Completa il recupero password: valida il codice OTP ricevuto via mail e imposta la nuova password.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Password reimpostata con successo"),
+            @ApiResponse(responseCode = "400", description = "Codice non valido/scaduto o password non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Verifica email con codice OTP",
+            description = "Verifica l'indirizzo email inserendo il codice OTP ricevuto durante la registrazione. "
+                    + "Sblocca il login.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Email verificata con successo"),
+            @ApiResponse(responseCode = "400", description = "Codice non valido o scaduto",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/verify-email")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public ResponseEntity<Void> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        authService.verifyEmail(request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Reinvio codice di verifica email",
+            description = "Reinvia un nuovo codice OTP di verifica. Per sicurezza risponde sempre 202, "
+                    + "indipendentemente dal fatto che l'email esista o sia già verificata.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Richiesta accettata (il codice è inviato se l'email esiste e non è verificata)"),
+            @ApiResponse(responseCode = "400", description = "Email non valida",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Void> resendVerification(@Valid @RequestBody ResendVerificationRequest request) {
+        authService.resendVerification(request);
         return ResponseEntity.accepted().build();
     }
 }

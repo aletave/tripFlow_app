@@ -4,9 +4,11 @@ import java.util.UUID;
 
 //Risposta alla registrazione: nessun token (il login avviene su Keycloak).
 //requiresLogin=true comunica al client di procedere col login sull'IdP.
+//requiresVerification=true indica che prima serve verificare l'email col codice OTP.
 public record RegisterResponse(
         UUID id,
         String email,
-        boolean requiresLogin
+        boolean requiresLogin,
+        boolean requiresVerification
 ) {
 }

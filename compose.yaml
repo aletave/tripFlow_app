@@ -153,6 +153,10 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
       KEYCLOAK_SERVER_URL: http://keycloak:8080
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+    volumes:
+      - user_auth_avatars:/app/uploads/avatars
     depends_on:
       discovery-service:
         condition: service_healthy
@@ -162,6 +166,9 @@ services:
         condition: service_started
       keycloak:
         condition: service_started
+      mailpit:
+        condition: service_started
+    restart: unless-stopped
   catalog-service:
     build: ./catalog-service
     container_name: catalog-service
@@ -210,3 +217,4 @@ services:
 volumes:
   postgresql_data:
   postgres_keycloak_data:
+  user_auth_avatars:

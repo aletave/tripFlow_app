@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
-@Schema(description = "Richiesta di recupero password: Keycloak invierà una mail con il link di reset")
+@Schema(description = "Richiesta di recupero password: invia una mail con un codice OTP per il reset")
 public record ForgotPasswordRequest(
         @Schema(description = "Indirizzo email dell'account", example = "mario.rossi@example.com")
         @NotBlank(message = "L'email è obbligatoria")

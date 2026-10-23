@@ -60,7 +60,8 @@ public class KeycloakAdminClient {
             user.setFirstName(firstName);
             user.setLastName(lastName);
             user.setEnabled(true);
-            user.setEmailVerified(true);
+            //email non verificata: lo diventa solo dopo l'inserimento del codice OTP (vedi AuthService)
+            user.setEmailVerified(false);
 
             CredentialRepresentation credenziale = new CredentialRepresentation();
             credenziale.setType(CredentialRepresentation.PASSWORD);
@@ -128,19 +129,30 @@ public class KeycloakAdminClient {
         }
     }
 
-    //Recupero password: invia una email con il link di reset tramite Keycloak (via SMTP configurato nel realm).
-    //Usa executeActionsEmail con l'azione UPDATE_PASSWORD: Keycloak genera un token temporaneo sicuro
-    //e invia la mail al server SMTP configurato nelle impostazioni del realm (es. Mailpit in sviluppo).
-    public void sendResetPasswordEmail(String keycloakId) {
+    //Indica se l'indirizzo email dell'utente risulta verificato su Keycloak.
+    //Usato dal proxy di login per bloccare l'accesso a chi non ha ancora confermato l'email.
+    public boolean isEmailVerified(String keycloakId) {
         try {
-            getInstance().realm(realmName)
-                    .users()
-                    .get(keycloakId)
-                    .executeActionsEmail(List.of("UPDATE_PASSWORD"));
-            log.info("Email di recupero password inviata per keycloak_id={}", keycloakId);
+            UserRepresentation user = getInstance().realm(realmName).users().get(keycloakId).toRepresentation();
+            return Boolean.TRUE.equals(user.isEmailVerified());
         } catch (Exception e) {
-            log.error("Errore durante l'invio della mail di recupero password per {}", keycloakId, e);
-            throw new KeycloakOperationException("Errore durante l'invio della mail di recupero password", e);
+            log.error("Errore durante la lettura dello stato di verifica email per {}", keycloakId, e);
+            throw new KeycloakOperationException("Errore durante la verifica dello stato email su Keycloak", e);
+        }
+    }
+
+    //Segna l'email come verificata su Keycloak: chiamata dopo che l'utente ha inserito
+    //correttamente il codice OTP ricevuto via mail.
+    public void markEmailVerified(String keycloakId) {
+        try {
+            var userResource = getInstance().realm(realmName).users().get(keycloakId);
+            UserRepresentation user = userResource.toRepresentation();
+            user.setEmailVerified(true);
+            userResource.update(user);
+            log.info("Email verificata su Keycloak per keycloak_id={}", keycloakId);
+        } catch (Exception e) {
+            log.error("Errore durante l'aggiornamento dello stato di verifica email per {}", keycloakId, e);
+            throw new KeycloakOperationException("Errore durante l'aggiornamento dello stato email su Keycloak", e);
         }
     }
 

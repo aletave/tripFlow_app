@@ -25,6 +25,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final String LOGIN_PATH = "/api/auth/login";
     private static final String REFRESH_PATH = "/api/auth/refresh";
     private static final String FORGOT_PASSWORD_PATH = "/api/auth/forgot-password";
+    private static final String RESET_PASSWORD_PATH = "/api/auth/reset-password";
+    private static final String VERIFY_EMAIL_PATH = "/api/auth/verify-email";
+    private static final String RESEND_VERIFICATION_PATH = "/api/auth/resend-verification";
 
     private final boolean enabled;
     private final int maxRequestsPerWindow;
@@ -46,7 +49,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
         boolean isProtectedEndpoint = REGISTER_PATH.equals(uri)
                 || LOGIN_PATH.equals(uri)
                 || REFRESH_PATH.equals(uri)
-                || FORGOT_PASSWORD_PATH.equals(uri);
+                || FORGOT_PASSWORD_PATH.equals(uri)
+                || RESET_PASSWORD_PATH.equals(uri)
+                || VERIFY_EMAIL_PATH.equals(uri)
+                || RESEND_VERIFICATION_PATH.equals(uri);
         if (!enabled || !"POST".equalsIgnoreCase(request.getMethod()) || !isProtectedEndpoint) {
             filterChain.doFilter(request, response);
             return;

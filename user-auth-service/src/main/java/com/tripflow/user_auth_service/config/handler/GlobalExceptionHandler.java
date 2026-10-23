@@ -2,7 +2,9 @@ package com.tripflow.user_auth_service.config.handler;
 
 import com.tripflow.user_auth_service.dto.errors.ServiceError;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
+import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
+import com.tripflow.user_auth_service.exception.InvalidOtpException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import jakarta.persistence.EntityNotFoundException;
@@ -57,6 +59,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ServiceError onEmailAlreadyExists(WebRequest req, EmailAlreadyExistsException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ServiceError onEmailNotVerified(WebRequest req, EmailNotVerifiedException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidOtpException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onInvalidOtp(WebRequest req, InvalidOtpException ex) {
         return errorResponse(req, ex.getMessage());
     }
 

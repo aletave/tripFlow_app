@@ -1,12 +1,17 @@
 package com.tripflow.user_auth_service.service;
 
+import com.tripflow.user_auth_service.config.AvatarStorageConfig;
 import com.tripflow.user_auth_service.config.KeycloakAdminClient;
 import com.tripflow.user_auth_service.config.KeycloakAuthClient;
 import com.tripflow.user_auth_service.dto.request.ChangePasswordRequest;
+import com.tripflow.user_auth_service.dto.request.ForgotPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.LoginRequest;
 import com.tripflow.user_auth_service.dto.request.LogoutRequest;
 import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
+import com.tripflow.user_auth_service.dto.request.ResendVerificationRequest;
+import com.tripflow.user_auth_service.dto.request.ResetPasswordRequest;
+import com.tripflow.user_auth_service.dto.request.VerifyEmailRequest;
 import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
@@ -14,7 +19,10 @@ import com.tripflow.user_auth_service.dto.response.RegisterResponse;
 import com.tripflow.user_auth_service.dto.response.TokenRefreshResponse;
 import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
+import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
+import com.tripflow.user_auth_service.exception.InvalidOtpException;
+import com.tripflow.user_auth_service.model.OtpPurpose;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import com.tripflow.user_auth_service.model.Role;
 import com.tripflow.user_auth_service.model.User;
@@ -53,6 +61,15 @@ class AuthServiceTest {
     @Mock
     private UserEventProducer userEventProducer;
 
+    @Mock
+    private AvatarStorageConfig avatarStorage;
+
+    @Mock
+    private OtpService otpService;
+
+    @Mock
+    private MailService mailService;
+
     @InjectMocks
     private AuthService authService;
 
@@ -83,6 +100,7 @@ class AuthServiceTest {
         assertEquals(id, risposta.id());
         assertEquals("mario.rossi@example.com", risposta.email());
         assertTrue(risposta.requiresLogin());
+        assertTrue(risposta.requiresVerification());
         verify(userRepository).existsByEmail("mario.rossi@example.com");
         verify(keycloakAdminClient).createUser(eq("mario.rossi@example.com"), eq("password"), eq("Mario"), eq("Rossi"),
                 eq("TRAVELER"), any());
@@ -193,12 +211,28 @@ class AuthServiceTest {
     }
 
     @Test
-    void changePassword_delegaAKeycloakConIlKeycloakIdDelDb() {
-        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(utenteConId(UUID.randomUUID(), "kc-123")));
+    void changePassword_passwordAttualeCorretta_delegaAKeycloak() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
 
-        authService.changePassword("kc-123", new ChangePasswordRequest("nuova-password"));
+        authService.changePassword("kc-123", new ChangePasswordRequest("vecchia-password", "nuova-password"));
 
+        //prima verifica la password attuale con un login, poi aggiorna
+        verify(keycloakAuthClient).login(user.getEmail(), "vecchia-password");
         verify(keycloakAdminClient).changePassword("kc-123", "nuova-password");
+    }
+
+    @Test
+    void changePassword_passwordAttualeErrata_nonCambiaNulla() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
+        when(keycloakAuthClient.login(user.getEmail(), "sbagliata"))
+                .thenThrow(new InvalidCredentialsException("Email o password non validi"));
+
+        assertThrows(InvalidCredentialsException.class,
+                () -> authService.changePassword("kc-123", new ChangePasswordRequest("sbagliata", "nuova-password")));
+
+        verify(keycloakAdminClient, never()).changePassword(anyString(), anyString());
     }
 
     @Test
@@ -292,6 +326,7 @@ class AuthServiceTest {
 
         when(keycloakAuthClient.login("mario.rossi@example.com", "Password123!")).thenReturn(tokenResponse);
         when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        when(keycloakAdminClient.isEmailVerified("kc-123")).thenReturn(true);
 
         LoginResponse response = authService.login(request);
 
@@ -359,6 +394,153 @@ class AuthServiceTest {
         authService.logout(request);
 
         verify(keycloakAuthClient).logout("valid-refresh-token");
+    }
+
+    // ===== Verifica email con OTP =====
+
+    @Test
+    void register_inviaCodiceDiVerificaViaEmail() {
+        when(userRepository.existsByEmail("mario.rossi@example.com")).thenReturn(false);
+        when(keycloakAdminClient.createUser(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
+                .thenReturn("kc-123");
+        mockSaveConId(UUID.randomUUID());
+        when(otpService.issue("kc-123", "mario.rossi@example.com", OtpPurpose.EMAIL_VERIFICATION)).thenReturn("123456");
+
+        authService.register(registerRequest());
+
+        verify(otpService).issue("kc-123", "mario.rossi@example.com", OtpPurpose.EMAIL_VERIFICATION);
+        verify(mailService).sendVerificationOtp("mario.rossi@example.com", "Mario", "123456");
+    }
+
+    @Test
+    void login_emailNonVerificata_rilanciaEmailNotVerifiedException() {
+        LoginRequest request = new LoginRequest("mario.rossi@example.com", "Password123!");
+        KeycloakTokenResponse tokenResponse = new KeycloakTokenResponse(
+                "token", 300L, 1800L, "refresh", "Bearer", "openid");
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+
+        when(keycloakAuthClient.login("mario.rossi@example.com", "Password123!")).thenReturn(tokenResponse);
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        when(keycloakAdminClient.isEmailVerified("kc-123")).thenReturn(false);
+
+        assertThrows(EmailNotVerifiedException.class, () -> authService.login(request));
+    }
+
+    @Test
+    void verifyEmail_codiceCorretto_segnaVerificataSuKeycloak() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+
+        authService.verifyEmail(new VerifyEmailRequest("mario.rossi@example.com", "123456"));
+
+        verify(otpService).verify("kc-123", OtpPurpose.EMAIL_VERIFICATION, "123456");
+        verify(keycloakAdminClient).markEmailVerified("kc-123");
+    }
+
+    @Test
+    void verifyEmail_codiceErrato_nonSegnaVerificata() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        doThrow(new InvalidOtpException("Codice non valido o scaduto"))
+                .when(otpService).verify("kc-123", OtpPurpose.EMAIL_VERIFICATION, "000000");
+
+        assertThrows(InvalidOtpException.class,
+                () -> authService.verifyEmail(new VerifyEmailRequest("mario.rossi@example.com", "000000")));
+
+        verify(keycloakAdminClient, never()).markEmailVerified(anyString());
+    }
+
+    @Test
+    void verifyEmail_emailInesistente_InvalidOtpSenzaVerificare() {
+        when(userRepository.findByEmail("ignoto@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(InvalidOtpException.class,
+                () -> authService.verifyEmail(new VerifyEmailRequest("ignoto@example.com", "123456")));
+
+        verify(otpService, never()).verify(anyString(), any(), anyString());
+        verify(keycloakAdminClient, never()).markEmailVerified(anyString());
+    }
+
+    @Test
+    void resendVerification_giaVerificata_nonInviaNulla() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        when(keycloakAdminClient.isEmailVerified("kc-123")).thenReturn(true);
+
+        authService.resendVerification(new ResendVerificationRequest("mario.rossi@example.com"));
+
+        verify(otpService, never()).issue(anyString(), anyString(), any());
+        verify(mailService, never()).sendVerificationOtp(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void resendVerification_nonVerificata_reinviaIlCodice() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        when(keycloakAdminClient.isEmailVerified("kc-123")).thenReturn(false);
+        when(otpService.issue("kc-123", "mario.rossi@example.com", OtpPurpose.EMAIL_VERIFICATION)).thenReturn("654321");
+
+        authService.resendVerification(new ResendVerificationRequest("mario.rossi@example.com"));
+
+        verify(mailService).sendVerificationOtp("mario.rossi@example.com", "Mario", "654321");
+    }
+
+    // ===== Reset password con OTP =====
+
+    @Test
+    void forgotPassword_utenteEsiste_inviaCodiceDiReset() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        when(otpService.issue("kc-123", "mario.rossi@example.com", OtpPurpose.PASSWORD_RESET)).thenReturn("111222");
+
+        authService.forgotPassword(new ForgotPasswordRequest("mario.rossi@example.com"));
+
+        verify(mailService).sendPasswordResetOtp("mario.rossi@example.com", "Mario", "111222");
+    }
+
+    @Test
+    void forgotPassword_utenteNonEsiste_nessunInvio() {
+        when(userRepository.findByEmail("ignoto@example.com")).thenReturn(Optional.empty());
+
+        authService.forgotPassword(new ForgotPasswordRequest("ignoto@example.com"));
+
+        verify(otpService, never()).issue(anyString(), anyString(), any());
+        verify(mailService, never()).sendPasswordResetOtp(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void resetPassword_codiceCorretto_aggiornaPasswordSuKeycloak() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+
+        authService.resetPassword(new ResetPasswordRequest("mario.rossi@example.com", "123456", "NuovaPassword1!"));
+
+        verify(otpService).verify("kc-123", OtpPurpose.PASSWORD_RESET, "123456");
+        verify(keycloakAdminClient).changePassword("kc-123", "NuovaPassword1!");
+    }
+
+    @Test
+    void resetPassword_codiceErrato_nonAggiornaPassword() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByEmail("mario.rossi@example.com")).thenReturn(Optional.of(user));
+        doThrow(new InvalidOtpException("Codice non valido o scaduto"))
+                .when(otpService).verify("kc-123", OtpPurpose.PASSWORD_RESET, "000000");
+
+        assertThrows(InvalidOtpException.class,
+                () -> authService.resetPassword(new ResetPasswordRequest("mario.rossi@example.com", "000000", "NuovaPassword1!")));
+
+        verify(keycloakAdminClient, never()).changePassword(anyString(), anyString());
+    }
+
+    @Test
+    void resetPassword_emailInesistente_InvalidOtp() {
+        when(userRepository.findByEmail("ignoto@example.com")).thenReturn(Optional.empty());
+
+        assertThrows(InvalidOtpException.class,
+                () -> authService.resetPassword(new ResetPasswordRequest("ignoto@example.com", "123456", "NuovaPassword1!")));
+
+        verify(otpService, never()).verify(anyString(), any(), anyString());
+        verify(keycloakAdminClient, never()).changePassword(anyString(), anyString());
     }
 
     private User utenteConId(UUID id, String keycloakId) {

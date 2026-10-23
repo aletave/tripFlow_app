@@ -155,13 +155,22 @@ sequenceDiagram
 
 ### 3. `user-auth-service`
 *   Gestione credenziali e profili utente in combinazione con **Keycloak**.
+*   **Verifica email con OTP**: alla registrazione l'utente riceve via mail un codice a 6 cifre; il login resta bloccato (403) finché l'email non è verificata.
+*   **Reset password con OTP**: `forgot-password` invia un codice via mail, `reset-password` lo valida e imposta la nuova password.
+*   **Email di compleanno**: job schedulato giornaliero che invia un augurio con un codice sconto del 15% valido 2 settimane (codice dimostrativo, non ancora riscattabile al checkout).
+*   Le email applicative passano da un server SMTP (in sviluppo **Mailpit**, UI su `http://localhost:8025`).
 *   **Endpoint principali**:
-    *   `POST /api/auth/register`: Registrazione con assegnazione ruolo (`TRAVELER` o `ORGANIZER`), creazione account Keycloak e sincronizzazione DB locale. Include Rate Limiting (5 richieste/minuto).
-    *   `POST /api/auth/login`: Autenticazione (Resource Owner Password Credentials contro Keycloak) con rilascio di Access Token e Refresh Token.
+    *   `POST /api/auth/register`: Registrazione con ruolo (`TRAVELER`/`ORGANIZER`), creazione account Keycloak, sincronizzazione DB locale e invio del codice di verifica. Rate limiting (5 richieste/minuto).
+    *   `POST /api/auth/verify-email`, `POST /api/auth/resend-verification`: Verifica email tramite codice OTP e reinvio del codice.
+    *   `POST /api/auth/login`: Autenticazione (Resource Owner Password Credentials contro Keycloak) con rilascio di Access e Refresh Token. Bloccata se l'email non è verificata.
     *   `POST /api/auth/refresh`: Refresh del token JWT scaduto.
-    *   `GET /api/auth/profile`, `PUT /api/auth/profile`: Visualizzazione e aggiornamento anagrafica.
-    *   `POST /api/auth/profile/avatar`: Upload dell'avatar con validazione tipo (JPEG/PNG/WebP, max 5MB).
-    *   `POST /api/auth/users/lookup`: Lookup utenti inter-servizio.
+    *   `POST /api/auth/logout`: Revoca del refresh token (RFC 7009).
+    *   `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`: Recupero password tramite codice OTP.
+    *   `GET /api/auth/me`, `PUT /api/auth/me`: Visualizzazione e aggiornamento anagrafica.
+    *   `PUT /api/auth/me/password`: Cambio password (richiede la password attuale per conferma).
+    *   `POST /api/auth/me/avatar`: Upload dell'avatar con validazione tipo (JPEG/PNG/WebP, max 5MB).
+    *   `DELETE /api/auth/me`: Eliminazione account (DB locale + Keycloak + evento RabbitMQ).
+    *   `POST /api/auth/users/lookup`, `POST /api/auth/users/lookup-by-ids`: Lookup utenti inter-servizio.
 
 ### 4. `catalog-service`
 *   Gestione dell'offerta turistica.
@@ -215,6 +224,8 @@ L'architettura adotta lo standard **OAuth 2.0 / OpenID Connect**:
 *   Tutti i microservizi di backend agiscono come **OAuth2 Resource Server**, convalidando i token JWT emessi dal realm `tripflow` di Keycloak tramite endpoint JWKS (`/protocol/openid-connect/certs`).
 *   I ruoli utente (`TRAVELER`, `ORGANIZER`) sono mappati nei token JWT e valutati tramite annotazioni `@PreAuthorize("hasRole('ORGANIZER')")` o utility di sicurezza custom (`SecurityUtils`).
 *   Il file `compose.yaml` avvia Keycloak con realm preconfigurato importato automaticamente da `./keycloak/realm-export.json`.
+*   Il realm abilita la **protezione brute-force** (blocco temporaneo dopo 5 tentativi di login falliti) e una **password policy** minima (lunghezza ≥ 8). NB: queste impostazioni vengono applicate solo al primo import del realm; su un volume Keycloak già esistente vanno abilitate dalla console admin o rigenerando il volume.
+*   **Verifica email** e **reset password** sono gestiti internamente da `user-auth-service` tramite codici OTP via email, non dai flussi email nativi di Keycloak.
 
 ---
 

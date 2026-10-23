@@ -73,7 +73,7 @@ class AuthControllerTest {
 
     @Test
     void register_valido_201() throws Exception {
-        when(authService.register(any())).thenReturn(new RegisterResponse(ID, "mario.rossi@example.com", true));
+        when(authService.register(any())).thenReturn(new RegisterResponse(ID, "mario.rossi@example.com", true, true));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -324,7 +324,7 @@ class AuthControllerTest {
                         .with(jwt().jwt(j -> j.subject("kc-123")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"newPassword": "password2"}
+                                {"currentPassword": "password1", "newPassword": "password2"}
                                 """))
                 .andExpect(status().isNoContent());
 

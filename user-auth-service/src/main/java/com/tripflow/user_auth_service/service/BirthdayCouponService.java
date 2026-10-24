@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.MonthDay;
+import java.time.ZoneId;
 
 //Regole del codice sconto di compleanno. Il codice è uguale per tutti, quindi il diritto
 //a usarlo dipende dall'utente:
@@ -34,11 +35,16 @@ public class BirthdayCouponService {
     @Value("${app.birthday.min-days-before-birthday:30}")
     private int giorniMinimiPrima = 30;
 
+    //Stesso fuso del job degli auguri: nei container il fuso di sistema è UTC, e tra mezzanotte
+    //e le 2 italiane "oggi" sarebbe ancora il giorno prima.
+    @Value("${app.birthday.zone:Europe/Rome}")
+    private String fuso = "Europe/Rome";
+
     //Orologio iniettabile: nei test viene fissato per simulare i diversi giorni.
-    private Clock clock = Clock.systemDefaultZone();
+    private Clock clock = Clock.systemUTC();
 
     public BirthdayCouponResponse verifica(User user) {
-        LocalDate oggi = LocalDate.now(clock);
+        LocalDate oggi = LocalDate.now(clock.withZone(ZoneId.of(fuso)));
         if (user.getDateOfBirth() == null || user.getDateOfBirthSetAt() == null) {
             return rifiuto(null, null, NO_BIRTH_DATE,
                     "Aggiungi la data di nascita al profilo per ricevere il codice di compleanno");

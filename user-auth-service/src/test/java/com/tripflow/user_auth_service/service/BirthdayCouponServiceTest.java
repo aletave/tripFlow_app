@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -113,6 +114,25 @@ class BirthdayCouponServiceTest {
 
         assertTrue(r.eligible());
         assertEquals(LocalDate.of(2026, 12, 29), r.validFrom());
+    }
+
+    @Test
+    void ilGiornoSiCalcolaInOraItaliana_nonInUtc() {
+        //nei container l'orologio di sistema è UTC: 22:30 UTC è già mezzanotte e mezza a Roma
+        User u = utente(LocalDate.of(1999, 10, 24), LocalDate.of(2025, 1, 10));
+
+        istante("2026-10-23T22:30:00Z");
+        BirthdayCouponResponse r = service.verifica(u);
+        assertTrue(r.eligible());
+        assertEquals(LocalDate.of(2026, 10, 24), r.validFrom());
+
+        //ultimo giorno 31/10: alle 00:30 italiane del 1/11 la finestra è chiusa
+        istante("2026-10-31T23:30:00Z");
+        assertFalse(service.verifica(u).eligible());
+    }
+
+    private void istante(String utc) {
+        ReflectionTestUtils.setField(service, "clock", Clock.fixed(Instant.parse(utc), ZoneOffset.UTC));
     }
 
     private void oggi(LocalDate data) {

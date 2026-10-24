@@ -1,7 +1,10 @@
 package com.tripflow.booking.data.service;
 
 import com.stripe.model.PaymentIntent;
+import com.tripflow.booking.client.UserAuthClient;
+import com.tripflow.booking.client.dto.BirthdayCouponDTO;
 import com.tripflow.booking.config.PrenotazioneProperties;
+import com.tripflow.booking.config.ScontoProperties;
 import com.tripflow.booking.data.dao.PagamentoRepository;
 import com.tripflow.booking.data.dao.PrenotazioneRepository;
 import com.tripflow.booking.data.dto.responses.PagamentoIntentResponse;
@@ -26,6 +29,8 @@ import com.tripflow.booking.exception.PagamentoEsistenteException;
 import com.tripflow.booking.exception.StatoPrenotazioneException;
 import com.tripflow.booking.exception.StatoPagamentoException;
 import com.tripflow.booking.exception.CodiceScontoNonValidoException;
+import com.tripflow.booking.exception.ServizioNonDisponibileException;
+import feign.FeignException;
 import org.springframework.security.access.AccessDeniedException;
 
 
@@ -47,6 +52,8 @@ public class PagamentoServiceImpl implements PagamentoService {
     private final ApplicationEventPublisher eventPublisher;
     private final StripeService stripeService;
     private final PrenotazioneProperties prenotazioneProperties;
+    private final ScontoProperties scontoProperties;
+    private final UserAuthClient userAuthClient;
 
 
     @Override
@@ -165,13 +172,34 @@ public class PagamentoServiceImpl implements PagamentoService {
             return new ImportoDaPagare(prezzoPieno, null, null);
         }
 
-        StripeService.CodiceSconto sconto = stripeService.recuperaCodiceSconto(codiceSconto.trim());
+        String codiceInserito = codiceSconto.trim();
 
-        boolean giaUsato = pagamentoRepository.codiceGiaUsatoDaViaggiatore(
-                sconto.codice(), viaggiatoreId, prenotazione.getId(), LocalDateTime.now());
-        if (giaUsato) {
-            log.warn("Codice sconto {} già utilizzato dal viaggiatore {}", sconto.codice(), viaggiatoreId);
-            throw new CodiceScontoNonValidoException("Hai già utilizzato il codice sconto " + sconto.codice());
+        BirthdayCouponDTO couponCompleanno = null;
+        if (codiceInserito.equalsIgnoreCase(scontoProperties.codiceCompleanno())) {
+            couponCompleanno = verificaCodiceCompleanno(viaggiatoreId);
+        }
+
+        StripeService.CodiceSconto sconto = stripeService.recuperaCodiceSconto(codiceInserito);
+
+        if (couponCompleanno != null) {
+            boolean giaUsatoQuestoCompleanno = pagamentoRepository.codiceGiaUsatoDaViaggiatoreNelPeriodo(
+                    sconto.codice(), viaggiatoreId, prenotazione.getId(), LocalDateTime.now(),
+                    couponCompleanno.getValidFrom().atStartOfDay(),
+                    couponCompleanno.getValidUntil().plusDays(1).atStartOfDay());
+            if (giaUsatoQuestoCompleanno) {
+                log.warn("Codice compleanno {} già utilizzato dal viaggiatore {} nel periodo {} - {}",
+                        sconto.codice(), viaggiatoreId,
+                        couponCompleanno.getValidFrom(), couponCompleanno.getValidUntil());
+                throw new CodiceScontoNonValidoException(
+                        "Hai già utilizzato il codice sconto " + sconto.codice() + " per questo compleanno");
+            }
+        } else {
+            boolean giaUsato = pagamentoRepository.codiceGiaUsatoDaViaggiatore(
+                    sconto.codice(), viaggiatoreId, prenotazione.getId(), LocalDateTime.now());
+            if (giaUsato) {
+                log.warn("Codice sconto {} già utilizzato dal viaggiatore {}", sconto.codice(), viaggiatoreId);
+                throw new CodiceScontoNonValidoException("Hai già utilizzato il codice sconto " + sconto.codice());
+            }
         }
 
         BigDecimal riduzione = prezzoPieno
@@ -183,6 +211,35 @@ public class PagamentoServiceImpl implements PagamentoService {
                 sconto.codice(), sconto.percentuale(), prenotazione.getId(), prezzoPieno, finale);
 
         return new ImportoDaPagare(finale, prezzoPieno, sconto.codice());
+    }
+
+    private BirthdayCouponDTO verificaCodiceCompleanno(UUID viaggiatoreId) {
+        BirthdayCouponDTO coupon;
+        try {
+            coupon = userAuthClient.getBirthdayCoupon();
+        } catch (FeignException e) {
+            log.error("Errore comunicazione con user-auth-service per il codice compleanno del viaggiatore {}",
+                    viaggiatoreId, e);
+            throw new ServizioNonDisponibileException(
+                    "Impossibile verificare il codice compleanno: user-auth-service non disponibile");
+        }
+
+        if (!coupon.isEligible()) {
+            log.warn("Codice compleanno rifiutato per il viaggiatore {}: {}", viaggiatoreId, coupon.getReason());
+            String messaggio = coupon.getMessage();
+            if (messaggio == null || messaggio.isBlank()) {
+                messaggio = "Codice compleanno non utilizzabile";
+            }
+            throw new CodiceScontoNonValidoException(messaggio);
+        }
+
+        if (coupon.getValidFrom() == null || coupon.getValidUntil() == null) {
+            log.error("Risposta user-auth-service senza periodo di validità per il viaggiatore {}", viaggiatoreId);
+            throw new ServizioNonDisponibileException(
+                    "Impossibile verificare il codice compleanno: risposta di user-auth-service incompleta");
+        }
+
+        return coupon;
     }
 
     private void applicaImporto(Pagamento pagamento, ImportoDaPagare importo) {

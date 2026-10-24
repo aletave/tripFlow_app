@@ -6,12 +6,13 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import com.tripflow.booking.config.PrenotazioneProperties;
+import com.tripflow.booking.config.ScontoProperties;
 
 
 @SpringBootApplication
 @EnableFeignClients
 @EnableScheduling
-@EnableConfigurationProperties(PrenotazioneProperties.class)
+@EnableConfigurationProperties({PrenotazioneProperties.class, ScontoProperties.class})
 
 public class BookingServiceApplication {
 

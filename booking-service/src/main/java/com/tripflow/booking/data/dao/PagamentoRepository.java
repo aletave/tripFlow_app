@@ -43,4 +43,22 @@ public interface PagamentoRepository extends JpaRepository<Pagamento, UUID> {
                                         @Param("viaggiatoreId") UUID viaggiatoreId,
                                         @Param("prenotazioneId") UUID prenotazioneId,
                                         @Param("adesso") LocalDateTime adesso);
+
+    @Query("""
+           SELECT COUNT(pg) > 0 FROM Pagamento pg
+           WHERE pg.codiceSconto = :codice
+             AND pg.prenotazione.viaggiatoreId = :viaggiatoreId
+             AND pg.prenotazione.id <> :prenotazioneId
+             AND ((pg.stato = com.tripflow.booking.data.entities.enums.StatoPagamento.COMPLETATO
+                   AND pg.dataPagamento >= :inizio
+                   AND pg.dataPagamento < :fine)
+                  OR (pg.prenotazione.stato = com.tripflow.booking.data.entities.enums.StatoPrenotazione.IN_ATTESA
+                      AND pg.prenotazione.scadenzaIl > :adesso))
+           """)
+    boolean codiceGiaUsatoDaViaggiatoreNelPeriodo(@Param("codice") String codice,
+                                                  @Param("viaggiatoreId") UUID viaggiatoreId,
+                                                  @Param("prenotazioneId") UUID prenotazioneId,
+                                                  @Param("adesso") LocalDateTime adesso,
+                                                  @Param("inizio") LocalDateTime inizio,
+                                                  @Param("fine") LocalDateTime fine);
 }

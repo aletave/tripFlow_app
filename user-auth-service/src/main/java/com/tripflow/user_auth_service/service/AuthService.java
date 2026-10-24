@@ -13,6 +13,7 @@ import com.tripflow.user_auth_service.dto.request.ResendVerificationRequest;
 import com.tripflow.user_auth_service.dto.request.ResetPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
 import com.tripflow.user_auth_service.dto.request.VerifyEmailRequest;
+import com.tripflow.user_auth_service.dto.response.BirthdayCouponResponse;
 import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
@@ -22,6 +23,7 @@ import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
 import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
+import com.tripflow.user_auth_service.exception.InvalidCurrentPasswordException;
 import com.tripflow.user_auth_service.exception.InvalidOtpException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
 import com.tripflow.user_auth_service.model.OtpPurpose;
@@ -31,6 +33,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
@@ -50,6 +54,7 @@ public class AuthService {
     private final AvatarStorageConfig avatarStorage;
     private final OtpService otpService;
     private final MailService mailService;
+    private final BirthdayCouponService birthdayCouponService;
 
     //Registrazione con scrittura doppia (dual-write) in ordine DB-check -> Keycloak -> DB-save.
     //Se il salvataggio su DB fallisce, compensa cancellando l'utente da Keycloak (con 1 retry).
@@ -81,8 +86,10 @@ public class AuthService {
         user.setEmail(email);
         user.setRole(request.role());
         user.setDateOfBirth(request.dateOfBirth());
+        if (request.dateOfBirth() != null) {
+            user.setDateOfBirthSetAt(LocalDateTime.now());
+        }
         user.setPhoneNumber(request.phoneNumber());
-        user.setProfileImage(request.profileImage());
 
         try {
             userRepository.save(user);
@@ -130,7 +137,9 @@ public class AuthService {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Profilo utente non trovato per l'email: " + email));
 
-        // 3. Blocco dell'accesso se l'email non è ancora stata verificata via OTP
+        // 3. Blocco dell'accesso se l'email non è ancora stata verificata via OTP.
+        // Per i nuovi account lo blocca già Keycloak (azione VERIFY_EMAIL, vedi KeycloakAuthClient);
+        // il controllo resta per gli account creati prima di quella modifica.
         if (!keycloakAdminClient.isEmailVerified(user.getKeycloakId())) {
             log.warn("Login bloccato: email non verificata per email={}", email);
             throw new EmailNotVerifiedException(
@@ -180,13 +189,14 @@ public class AuthService {
     }
 
     //Aggiornamento del profilo (solo campi anagrafici: le credenziali sono su Keycloak).
+    //L'immagine profilo si cambia solo da /me/avatar: un URL scelto dal client finirebbe
+    //poi in AvatarStorageConfig.elimina() e permetterebbe di cancellare file altrui.
     public UserResponse updateProfile(String keycloakId, UpdateProfileRequest request) {
         User user = loadByKeycloakId(keycloakId);
         user.setFirstName(request.firstName());
         user.setLastName(request.lastName());
-        user.setDateOfBirth(request.dateOfBirth());
+        aggiornaDataDiNascita(user, request.dateOfBirth());
         user.setPhoneNumber(request.phoneNumber());
-        user.setProfileImage(request.profileImage());
 
         User saved = userRepository.save(user);
         userEventProducer.publishUserProfileUpdated(saved.getId(), saved.getKeycloakId(),
@@ -196,7 +206,8 @@ public class AuthService {
     }
 
     //Cambio password: verifica prima la password attuale (tentando un login su Keycloak),
-    //poi aggiorna la credenziale su Keycloak. Nessuna modifica sul DB locale.
+    //poi aggiorna la credenziale su Keycloak e chiude tutte le sessioni dell'utente,
+    //compresa quella del dispositivo corrente: si rientra con la nuova password.
     public void changePassword(String keycloakId, ChangePasswordRequest request) {
         User user = loadByKeycloakId(keycloakId);
 
@@ -204,10 +215,12 @@ public class AuthService {
         try {
             keycloakAuthClient.login(user.getEmail(), request.currentPassword());
         } catch (InvalidCredentialsException e) {
-            throw new InvalidCredentialsException("La password attuale non è corretta");
+            throw new InvalidCurrentPasswordException("La password attuale non è corretta");
         }
 
         keycloakAdminClient.changePassword(user.getKeycloakId(), request.newPassword());
+        //chiude anche la sessione aperta dal login di verifica qui sopra
+        keycloakAdminClient.logoutAllSessions(user.getKeycloakId());
         log.info("Password aggiornata per keycloak_id={}", keycloakId);
     }
 
@@ -220,6 +233,8 @@ public class AuthService {
         String profileImage = user.getProfileImage();
 
         userRepository.delete(user);
+        //i codici OTP contengono l'email: non vanno lasciati dopo la cancellazione
+        otpService.deleteAllFor(keycloakId);
         if (avatarStorage != null && profileImage != null) {
             avatarStorage.elimina(profileImage);
         }
@@ -316,25 +331,29 @@ public class AuthService {
 
         otpService.verify(user.getKeycloakId(), OtpPurpose.PASSWORD_RESET, request.code());
         keycloakAdminClient.changePassword(user.getKeycloakId(), request.newPassword());
+        //chi ha resettato la password potrebbe averlo fatto perché l'account era compromesso
+        keycloakAdminClient.logoutAllSessions(user.getKeycloakId());
         log.info("Password reimpostata via OTP per email={}", email);
     }
 
-    //Recupero dei profili pubblici per lista di email: usato dagli altri servizi/app
-    //per risolvere i nomi degli utenti (es. autore di una recensione).
-    public List<PublicUserResponse> lookupByEmails(List<String> emails) {
-        //le email arrivano non normalizzate da chi chiama: si filtrano i valori vuoti
-        //e si abbassa il case, altrimenti le maiuscole non troverebbero nulla
-        List<String> emailNormalizzate = emails.stream()
-                .filter(email -> email != null && !email.isBlank())
-                .map(email -> email.toLowerCase(Locale.ROOT))
-                .toList();
-        if (emailNormalizzate.isEmpty()) {
-            return List.of();
+    //La data di nascita si imposta una volta sola: cambiarla permetterebbe di far coincidere
+    //il compleanno con il giorno della prenotazione e ottenere il codice sconto a piacere.
+    //Null nella richiesta = nessuna modifica (un client può non inviarla).
+    private void aggiornaDataDiNascita(User user, LocalDate nuovaData) {
+        if (nuovaData == null || nuovaData.equals(user.getDateOfBirth())) {
+            return;
         }
-        return userRepository.findByEmailIn(emailNormalizzate)
-                .stream()
-                .map(this::toPublicUserResponse)
-                .toList();
+        if (user.getDateOfBirth() != null) {
+            throw new IllegalArgumentException("La data di nascita non può essere modificata");
+        }
+        user.setDateOfBirth(nuovaData);
+        user.setDateOfBirthSetAt(LocalDateTime.now());
+    }
+
+    //Verifica se l'utente ha diritto oggi al codice sconto di compleanno.
+    //Usato da booking-service al checkout quando viene inserito il codice di compleanno.
+    public BirthdayCouponResponse getBirthdayCoupon(String keycloakId) {
+        return birthdayCouponService.verifica(loadByKeycloakId(keycloakId));
     }
 
     private User loadByKeycloakId(String keycloakId) {

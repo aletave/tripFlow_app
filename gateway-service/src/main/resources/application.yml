@@ -95,5 +95,6 @@ springdoc:
       - name: Catalog Service
         url: http://localhost:8084/v3/api-docs
 
+      # tramite il gateway: la porta 8086 non è pubblica in Docker
       - name: User Auth Service
-        url: http://localhost:8086/v3/api-docs
+        url: /user-auth-service/v3/api-docs

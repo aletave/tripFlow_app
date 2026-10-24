@@ -5,6 +5,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
+import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -21,6 +22,11 @@ public class OpenApiConfig {
                         .title("User Auth Service API")
                         .version("1.0.0")
                         .description("Documentazione delle api rest di registrazione e profilo utente di TripFlow"))
+
+                //"Try it out" passa dal gateway; il secondo server serve quando si apre la
+                //Swagger direttamente sul servizio avviato in locale (es. da IntelliJ)
+                .addServersItem(new Server().url("/user-auth-service").description("Tramite gateway"))
+                .addServersItem(new Server().url("/").description("Servizio diretto (sviluppo locale)"))
 
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
 

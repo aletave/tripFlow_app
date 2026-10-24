@@ -1,5 +1,6 @@
 package com.tripflow.user_auth_service.service;
 
+import com.tripflow.user_auth_service.dto.response.BirthdayCouponResponse;
 import com.tripflow.user_auth_service.model.Role;
 import com.tripflow.user_auth_service.model.User;
 import com.tripflow.user_auth_service.repository.UserRepository;
@@ -18,9 +19,11 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,6 +35,9 @@ class BirthdayServiceTest {
     @Mock
     private MailService mailService;
 
+    @Mock
+    private BirthdayCouponService birthdayCouponService;
+
     @InjectMocks
     private BirthdayService birthdayService;
 
@@ -39,6 +45,32 @@ class BirthdayServiceTest {
     void setUp() {
         //data neutra di default (non 28/02): i test base non devono dipendere dal giorno reale
         fissaData(LocalDate.of(2025, 6, 15));
+        lenient().when(birthdayCouponService.verifica(any())).thenReturn(COUPON_VALIDO);
+    }
+
+    private static final BirthdayCouponResponse COUPON_VALIDO = new BirthdayCouponResponse(
+            true, "BDAY15", LocalDate.of(2025, 6, 15), LocalDate.of(2025, 6, 22), null, "ok");
+
+    @Test
+    void inviaAuguri_conDirittoAlCodice_loIncludeConLaScadenza() {
+        when(userRepository.findByBirthday(anyInt(), anyInt())).thenReturn(List.of(utente("mario@example.com", "Mario")));
+
+        birthdayService.inviaAuguriDiCompleanno();
+
+        verify(mailService).sendBirthdayGreeting("mario@example.com", "Mario", "BDAY15", LocalDate.of(2025, 6, 22));
+    }
+
+    @Test
+    void inviaAuguri_senzaDirittoAlCodice_soloAuguri() {
+        when(userRepository.findByBirthday(anyInt(), anyInt())).thenReturn(List.of(utente("mario@example.com", "Mario")));
+        when(birthdayCouponService.verifica(any())).thenReturn(new BirthdayCouponResponse(
+                false, null, LocalDate.of(2026, 6, 15), LocalDate.of(2026, 6, 22),
+                BirthdayCouponService.BIRTH_DATE_TOO_RECENT, "no"));
+
+        birthdayService.inviaAuguriDiCompleanno();
+
+        //chi ha inserito la data di nascita da poco riceve gli auguri ma non il codice
+        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), isNull(), any());
     }
 
     @Test
@@ -49,8 +81,8 @@ class BirthdayServiceTest {
 
         birthdayService.inviaAuguriDiCompleanno();
 
-        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), anyString());
-        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), anyString());
+        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), any(), any());
+        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), any(), any());
     }
 
     @Test
@@ -59,7 +91,7 @@ class BirthdayServiceTest {
 
         birthdayService.inviaAuguriDiCompleanno();
 
-        verify(mailService, never()).sendBirthdayGreeting(anyString(), anyString(), anyString());
+        verify(mailService, never()).sendBirthdayGreeting(anyString(), anyString(), any(), any());
     }
 
     @Test
@@ -68,12 +100,12 @@ class BirthdayServiceTest {
         User lucia = utente("lucia@example.com", "Lucia");
         when(userRepository.findByBirthday(anyInt(), anyInt())).thenReturn(List.of(mario, lucia));
         doThrow(new RuntimeException("SMTP giù"))
-                .when(mailService).sendBirthdayGreeting(eq("mario@example.com"), anyString(), anyString());
+                .when(mailService).sendBirthdayGreeting(eq("mario@example.com"), anyString(), any(), any());
 
         birthdayService.inviaAuguriDiCompleanno();
 
         //nonostante il fallimento sul primo utente, il secondo riceve comunque gli auguri
-        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), anyString());
+        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), any(), any());
     }
 
     @Test
@@ -85,8 +117,8 @@ class BirthdayServiceTest {
 
         birthdayService.inviaAuguriDiCompleanno();
 
-        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), anyString());
-        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), anyString());
+        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), any(), any());
+        verify(mailService).sendBirthdayGreeting(eq("lucia@example.com"), eq("Lucia"), any(), any());
     }
 
     @Test
@@ -98,7 +130,7 @@ class BirthdayServiceTest {
         birthdayService.inviaAuguriDiCompleanno();
 
         verify(userRepository, never()).findByBirthday(2, 29);
-        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), anyString());
+        verify(mailService).sendBirthdayGreeting(eq("mario@example.com"), eq("Mario"), any(), any());
     }
 
     private void fissaData(LocalDate data) {

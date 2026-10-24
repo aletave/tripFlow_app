@@ -1,6 +1,7 @@
 package com.tripflow.user_auth_service.config;
 
 import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
+import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,6 +72,21 @@ class KeycloakAuthClientTest {
                         """).contentType(MediaType.APPLICATION_JSON));
 
         assertThrows(InvalidCredentialsException.class, () -> authClient.login("mario@example.com", "wrong"));
+        mockServer.verify();
+    }
+
+    @Test
+    void login_verificaEmailPendente_lanciaEmailNotVerifiedException() {
+        mockServer.expect(requestTo("http://localhost:9090/realms/tripflow/protocol/openid-connect/token"))
+                .andExpect(method(HttpMethod.POST))
+                .andRespond(withBadRequest().body("""
+                        {
+                          "error": "invalid_grant",
+                          "error_description": "Account is not fully set up"
+                        }
+                        """).contentType(MediaType.APPLICATION_JSON));
+
+        assertThrows(EmailNotVerifiedException.class, () -> authClient.login("mario@example.com", "password123"));
         mockServer.verify();
     }
 

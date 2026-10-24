@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -57,6 +58,16 @@ class OtpServiceTest {
         assertFalse(salvato.isConsumed());
         assertEquals(0, salvato.getAttempts());
         assertTrue(salvato.getExpiresAt().isAfter(LocalDateTime.now()));
+    }
+
+    @Test
+    void issue_invalidaICodiciPrecedentiPrimaDiSalvareIlNuovo() {
+        otpService.issue("kc-1", "a@b.it", OtpPurpose.PASSWORD_RESET);
+
+        //altrimenti un codice vecchio tornerebbe valido dopo l'uso di quello nuovo
+        InOrder ordine = inOrder(otpRepository);
+        ordine.verify(otpRepository).invalidateActive("kc-1", OtpPurpose.PASSWORD_RESET);
+        ordine.verify(otpRepository).save(any(EmailOtp.class));
     }
 
     @Test

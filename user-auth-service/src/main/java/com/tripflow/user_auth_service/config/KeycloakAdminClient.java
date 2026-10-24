@@ -23,6 +23,8 @@ import java.util.function.Predicate;
 @Slf4j
 public class KeycloakAdminClient {
 
+    private static final String VERIFY_EMAIL = "VERIFY_EMAIL";
+
     @Value("${keycloak.server-url}")
     private String serverUrl;
 
@@ -60,8 +62,11 @@ public class KeycloakAdminClient {
             user.setFirstName(firstName);
             user.setLastName(lastName);
             user.setEnabled(true);
-            //email non verificata: lo diventa solo dopo l'inserimento del codice OTP (vedi AuthService)
+            //email non verificata: lo diventa solo dopo l'inserimento del codice OTP (vedi AuthService).
+            //L'azione VERIFY_EMAIL fa rifiutare a Keycloak stesso il rilascio di token, anche a chi
+            //chiama direttamente il suo token endpoint saltando il nostro proxy di login.
             user.setEmailVerified(false);
+            user.setRequiredActions(List.of(VERIFY_EMAIL));
 
             CredentialRepresentation credenziale = new CredentialRepresentation();
             credenziale.setType(CredentialRepresentation.PASSWORD);
@@ -83,6 +88,9 @@ public class KeycloakAdminClient {
                     //era orfano: ripristino la password scelta, altrimenti il login fallirebbe
                     adottato = true;
                     resetPassword(keycloak, keycloakId, rawPassword);
+                    //chi si registra ora non ha ancora dimostrato di possedere l'email:
+                    //un eventuale stato "verificata" del vecchio account non va ereditato
+                    preparaOrfanoAdottato(keycloak, keycloakId, firstName, lastName);
                 } else {
                     throw new KeycloakOperationException(
                             "Impossibile creare l'utente " + email + " su Keycloak (status " + response.getStatus() + ")");
@@ -129,6 +137,17 @@ public class KeycloakAdminClient {
         }
     }
 
+    //Chiude tutte le sessioni Keycloak dell'utente (i refresh token smettono di funzionare).
+    //Non rilancia: la password è già cambiata, e far fallire la richiesta la confonderebbe.
+    public void logoutAllSessions(String keycloakId) {
+        try {
+            getInstance().realm(realmName).users().get(keycloakId).logout();
+            log.info("Sessioni chiuse su Keycloak per keycloak_id={}", keycloakId);
+        } catch (Exception e) {
+            log.warn("Impossibile chiudere le sessioni Keycloak per {}", keycloakId, e);
+        }
+    }
+
     //Indica se l'indirizzo email dell'utente risulta verificato su Keycloak.
     //Usato dal proxy di login per bloccare l'accesso a chi non ha ancora confermato l'email.
     public boolean isEmailVerified(String keycloakId) {
@@ -148,6 +167,8 @@ public class KeycloakAdminClient {
             var userResource = getInstance().realm(realmName).users().get(keycloakId);
             UserRepresentation user = userResource.toRepresentation();
             user.setEmailVerified(true);
+            List<String> azioni = user.getRequiredActions() == null ? List.of() : user.getRequiredActions();
+            user.setRequiredActions(azioni.stream().filter(a -> !VERIFY_EMAIL.equals(a)).toList());
             userResource.update(user);
             log.info("Email verificata su Keycloak per keycloak_id={}", keycloakId);
         } catch (Exception e) {
@@ -204,6 +225,16 @@ public class KeycloakAdminClient {
                     "Conflitto su Keycloak per " + email + " ma nessun utente trovato");
         }
         return trovati.get(0).getId();
+    }
+
+    private void preparaOrfanoAdottato(Keycloak keycloak, String keycloakId, String firstName, String lastName) {
+        var userResource = keycloak.realm(realmName).users().get(keycloakId);
+        UserRepresentation user = userResource.toRepresentation();
+        user.setFirstName(firstName);
+        user.setLastName(lastName);
+        user.setEmailVerified(false);
+        user.setRequiredActions(List.of(VERIFY_EMAIL));
+        userResource.update(user);
     }
 
     //Imposta la nuova password sull'utente Keycloak.

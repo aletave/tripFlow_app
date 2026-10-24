@@ -11,6 +11,7 @@ import com.tripflow.user_auth_service.dto.request.RefreshTokenRequest;
 import com.tripflow.user_auth_service.dto.request.RegisterRequest;
 import com.tripflow.user_auth_service.dto.request.ResendVerificationRequest;
 import com.tripflow.user_auth_service.dto.request.ResetPasswordRequest;
+import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
 import com.tripflow.user_auth_service.dto.request.VerifyEmailRequest;
 import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
@@ -21,6 +22,7 @@ import com.tripflow.user_auth_service.dto.response.UserResponse;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
 import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
+import com.tripflow.user_auth_service.exception.InvalidCurrentPasswordException;
 import com.tripflow.user_auth_service.exception.InvalidOtpException;
 import com.tripflow.user_auth_service.model.OtpPurpose;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
@@ -36,7 +38,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,12 +71,15 @@ class AuthServiceTest {
     @Mock
     private MailService mailService;
 
+    @Mock
+    private BirthdayCouponService birthdayCouponService;
+
     @InjectMocks
     private AuthService authService;
 
     private RegisterRequest registerRequest() {
         return new RegisterRequest("Mario", "Rossi", "mario.rossi@example.com",
-                "password", Role.TRAVELER, LocalDate.of(1990, 1, 1), "3331234567", null);
+                "password", Role.TRAVELER, LocalDate.of(1990, 1, 1), "3331234567");
     }
 
     //Mock di save che popola l'id come farebbe JPA.
@@ -154,7 +158,7 @@ class AuthServiceTest {
         mockSaveConId(UUID.randomUUID());
 
         RegisterRequest request = new RegisterRequest("Mario", "Rossi", "Mario.Rossi@Example.COM",
-                "password", Role.TRAVELER, LocalDate.of(1990, 1, 1), "3331234567", null);
+                "password", Role.TRAVELER, LocalDate.of(1990, 1, 1), "3331234567");
 
         authService.register(request);
 
@@ -211,6 +215,57 @@ class AuthServiceTest {
     }
 
     @Test
+    void register_conDataDiNascita_registraQuandoEStataImpostata() {
+        when(userRepository.existsByEmail("mario.rossi@example.com")).thenReturn(false);
+        when(keycloakAdminClient.createUser(anyString(), anyString(), anyString(), anyString(), anyString(), any()))
+                .thenReturn("kc-123");
+        mockSaveConId(UUID.randomUUID());
+
+        authService.register(registerRequest());
+
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        assertNotNull(captor.getValue().getDateOfBirthSetAt());
+    }
+
+    @Test
+    void updateProfile_dataDiNascitaGiaImpostata_nonSiPuoCambiare() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
+
+        //cambiarla permetterebbe di far coincidere il compleanno con la prenotazione
+        assertThrows(IllegalArgumentException.class, () -> authService.updateProfile("kc-123",
+                new UpdateProfileRequest("Mario", "Rossi", LocalDate.of(2001, 6, 1), null)));
+
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
+    void updateProfile_stessaDataONull_nonCambiaNulla() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        authService.updateProfile("kc-123", new UpdateProfileRequest("Mario", "Rossi", LocalDate.of(1990, 1, 1), null));
+        authService.updateProfile("kc-123", new UpdateProfileRequest("Mario", "Rossi", null, null));
+
+        assertEquals(LocalDate.of(1990, 1, 1), user.getDateOfBirth());
+    }
+
+    @Test
+    void updateProfile_primaImpostazioneDellaData_vieneSalvataConLaData() {
+        User user = utenteConId(UUID.randomUUID(), "kc-123");
+        user.setDateOfBirth(null);
+        when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+
+        authService.updateProfile("kc-123", new UpdateProfileRequest("Mario", "Rossi", LocalDate.of(1995, 3, 3), null));
+
+        assertEquals(LocalDate.of(1995, 3, 3), user.getDateOfBirth());
+        assertNotNull(user.getDateOfBirthSetAt());
+    }
+
+    @Test
     void changePassword_passwordAttualeCorretta_delegaAKeycloak() {
         User user = utenteConId(UUID.randomUUID(), "kc-123");
         when(userRepository.findByKeycloakId("kc-123")).thenReturn(Optional.of(user));
@@ -220,6 +275,8 @@ class AuthServiceTest {
         //prima verifica la password attuale con un login, poi aggiorna
         verify(keycloakAuthClient).login(user.getEmail(), "vecchia-password");
         verify(keycloakAdminClient).changePassword("kc-123", "nuova-password");
+        //tutte le sessioni vengono chiuse: l'app deve rifare il login con la nuova password
+        verify(keycloakAdminClient).logoutAllSessions("kc-123");
     }
 
     @Test
@@ -229,10 +286,12 @@ class AuthServiceTest {
         when(keycloakAuthClient.login(user.getEmail(), "sbagliata"))
                 .thenThrow(new InvalidCredentialsException("Email o password non validi"));
 
-        assertThrows(InvalidCredentialsException.class,
+        //400 e non 401: un 401 farebbe credere al client che la sessione sia scaduta
+        assertThrows(InvalidCurrentPasswordException.class,
                 () -> authService.changePassword("kc-123", new ChangePasswordRequest("sbagliata", "nuova-password")));
 
         verify(keycloakAdminClient, never()).changePassword(anyString(), anyString());
+        verify(keycloakAdminClient, never()).logoutAllSessions(anyString());
     }
 
     @Test
@@ -246,6 +305,7 @@ class AuthServiceTest {
         ordine.verify(userRepository).delete(any(User.class));
         ordine.verify(keycloakAdminClient).deleteUser("kc-123");
         verify(userEventProducer).publishUserDeleted(user.getId(), "kc-123", user.getEmail());
+        verify(otpService).deleteAllFor("kc-123");
     }
 
     @Test
@@ -258,42 +318,6 @@ class AuthServiceTest {
         //il DB è la fonte di verità per l'app: l'utente risulta eliminato,
         //l'eventuale account orfano su Keycloak verrà riadottato alla prossima registrazione
         verify(userRepository).delete(any(User.class));
-    }
-
-    @Test
-    void lookupByEmails_mappaSoloISuoiProfiloPubblico() {
-        User mario = utenteConId(UUID.randomUUID(), "kc-1", "Mario", "Rossi", "mario@example.com", Role.TRAVELER);
-        User lucia = utenteConId(UUID.randomUUID(), "kc-2", "Lucia", "Bianchi", "lucia@example.com", Role.ORGANIZER);
-        when(userRepository.findByEmailIn(List.of("mario@example.com", "lucia@example.com")))
-                .thenReturn(List.of(mario, lucia));
-
-        List<PublicUserResponse> risposta = authService.lookupByEmails(List.of("mario@example.com", "lucia@example.com"));
-
-        assertEquals(2, risposta.size());
-        PublicUserResponse primo = risposta.get(0);
-        assertEquals("Mario", primo.firstName());
-        assertEquals("Rossi", primo.lastName());
-        assertEquals(Role.TRAVELER, primo.role());
-    }
-
-    @Test
-    void lookupByEmails_emailConMaiuscole_normalizzateETrovate() {
-        User mario = utenteConId(UUID.randomUUID(), "kc-1", "Mario", "Rossi", "mario@example.com", Role.TRAVELER);
-        when(userRepository.findByEmailIn(List.of("mario@example.com"))).thenReturn(List.of(mario));
-
-        List<PublicUserResponse> risposta = authService.lookupByEmails(List.of("Mario@Example.COM"));
-
-        assertEquals(1, risposta.size());
-        assertEquals("Mario", risposta.get(0).firstName());
-    }
-
-    @Test
-    void lookupByEmails_listaConNullOBlanks_risultatoVuotoSenzaQuery() {
-        //Arrays.asList ammette i null, List.of no: serve proprio a simulare input sporchi
-        List<PublicUserResponse> risposta = authService.lookupByEmails(Arrays.asList(null, "  ", " "));
-
-        assertTrue(risposta.isEmpty());
-        verify(userRepository, never()).findByEmailIn(anyList());
     }
 
     @Test
@@ -517,6 +541,7 @@ class AuthServiceTest {
 
         verify(otpService).verify("kc-123", OtpPurpose.PASSWORD_RESET, "123456");
         verify(keycloakAdminClient).changePassword("kc-123", "NuovaPassword1!");
+        verify(keycloakAdminClient).logoutAllSessions("kc-123");
     }
 
     @Test

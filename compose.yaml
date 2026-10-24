@@ -145,8 +145,10 @@ services:
   user-auth-service:
     build: ./user-auth-service
     container_name: user-auth-service
-    ports:
-      - "8086:8086"
+    # nessuna porta pubblica: si passa solo dal gateway (8080), così il rate limit
+    # legge un X-Forwarded-For scritto dal gateway e non falsificabile dal client
+    expose:
+      - "8086"
     environment:
       EUREKA_URL: http://discovery-service:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/tripflow_user_db

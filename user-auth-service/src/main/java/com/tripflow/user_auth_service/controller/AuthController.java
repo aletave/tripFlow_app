@@ -12,8 +12,8 @@ import com.tripflow.user_auth_service.dto.request.ResendVerificationRequest;
 import com.tripflow.user_auth_service.dto.request.ResetPasswordRequest;
 import com.tripflow.user_auth_service.dto.request.UpdateProfileRequest;
 import com.tripflow.user_auth_service.dto.request.VerifyEmailRequest;
-import com.tripflow.user_auth_service.dto.request.UserLookupRequest;
 import com.tripflow.user_auth_service.dto.request.UserLookupByKeycloakIdsRequest;
+import com.tripflow.user_auth_service.dto.response.BirthdayCouponResponse;
 import com.tripflow.user_auth_service.dto.response.LoginResponse;
 import com.tripflow.user_auth_service.dto.response.PublicUserResponse;
 import com.tripflow.user_auth_service.dto.response.RegisterResponse;
@@ -31,7 +31,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
@@ -55,7 +54,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -73,12 +71,6 @@ public class AuthController {
 
     private final AuthService authService;
     private final AvatarStorageConfig avatarStorage;
-
-    @Value("${app.upload.dir:uploads/avatars}")
-    private String uploadDir;
-
-    @Value("${app.base-url:http://localhost:8086}")
-    private String baseUrl;
 
     @Operation(summary = "Registrazione nuovo utente",
             description = "Crea l'account su Keycloak con le credenziali fornite e memorizza il profilo applicativo su DB. Pubblica l'evento USER_REGISTERED su RabbitMQ.")
@@ -168,7 +160,7 @@ public class AuthController {
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Profilo aggiornato con successo"),
-            @ApiResponse(responseCode = "400", description = "Dati del profilo non validi",
+            @ApiResponse(responseCode = "400", description = "Dati del profilo non validi o tentativo di modificare la data di nascita",
                     content = @Content(schema = @Schema(implementation = ServiceError.class))),
             @ApiResponse(responseCode = "401", description = "Non autenticato",
                     content = @Content(schema = @Schema(implementation = ServiceError.class))),
@@ -183,12 +175,30 @@ public class AuthController {
         return ResponseEntity.ok(authService.updateProfile(jwt.getSubject(), request));
     }
 
+    @Operation(summary = "Diritto al codice sconto di compleanno",
+            description = "Indica se oggi l'utente autenticato può usare il codice sconto di compleanno: "
+                    + "vale dal compleanno ai giorni successivi configurati, e solo se la data di nascita "
+                    + "è stata inserita con anticipo sufficiente. Chiamato da booking-service al checkout.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Esito della verifica (eligible true/false con motivo)"),
+            @ApiResponse(responseCode = "401", description = "Non autenticato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
+            @ApiResponse(responseCode = "404", description = "Utente non trovato",
+                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
+    })
+    @GetMapping("/me/birthday-coupon")
+    public ResponseEntity<BirthdayCouponResponse> getBirthdayCoupon(@AuthenticationPrincipal Jwt jwt) {
+        return ResponseEntity.ok(authService.getBirthdayCoupon(jwt.getSubject()));
+    }
+
     @Operation(summary = "Cambio password",
-            description = "Aggiorna la password dell'utente autenticato su Keycloak.",
+            description = "Verifica la password attuale, aggiorna la password su Keycloak e chiude tutte le sessioni "
+                    + "dell'utente: i refresh token esistenti smettono di funzionare e serve un nuovo login.",
             security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Password modificata con successo"),
-            @ApiResponse(responseCode = "400", description = "Password non valida",
+            @ApiResponse(responseCode = "400", description = "Password attuale errata o nuova password non valida",
                     content = @Content(schema = @Schema(implementation = ServiceError.class))),
             @ApiResponse(responseCode = "401", description = "Non autenticato",
                     content = @Content(schema = @Schema(implementation = ServiceError.class)))
@@ -246,8 +256,11 @@ public class AuthController {
             @Parameter(description = "Nome file dell'avatar salvato")
             @PathVariable String filename
     ) {
+        Path file = avatarStorage.percorsoAvatar(filename);
+        if (file == null) {
+            return ResponseEntity.notFound().build();
+        }
         try {
-            Path file = Paths.get(uploadDir).resolve(filename).normalize();
             Resource resource = new UrlResource(file.toUri());
             if (!resource.exists() || !resource.isReadable()) {
                 return ResponseEntity.notFound().build();
@@ -312,23 +325,6 @@ public class AuthController {
             @PathVariable UUID id
     ) {
         return ResponseEntity.ok(authService.getPublicUserById(id));
-    }
-
-    @Operation(summary = "Lookup batch profili pubblici per email",
-            description = "Restituisce l'elenco dei profili pubblici corrispondenti a una lista di indirizzi email. Utilizzato da altri servizi per mostrare nomi e avatar di autori.",
-            security = @SecurityRequirement(name = "bearerAuth"))
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Lista profili pubblici restituita"),
-            @ApiResponse(responseCode = "400", description = "Richiesta di lookup non valida",
-                    content = @Content(schema = @Schema(implementation = ServiceError.class))),
-            @ApiResponse(responseCode = "401", description = "Non autenticato",
-                    content = @Content(schema = @Schema(implementation = ServiceError.class)))
-    })
-    @PostMapping("/users/lookup")
-    public ResponseEntity<List<PublicUserResponse>> lookupUsers(
-            @Valid @RequestBody UserLookupRequest request
-    ) {
-        return ResponseEntity.ok(authService.lookupByEmails(request.emails()));
     }
 
     @Operation(summary = "Lookup batch profili pubblici per Keycloak ID (sub del JWT)",

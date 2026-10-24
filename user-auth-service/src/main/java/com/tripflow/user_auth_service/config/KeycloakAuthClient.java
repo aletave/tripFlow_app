@@ -1,6 +1,7 @@
 package com.tripflow.user_auth_service.config;
 
 import com.tripflow.user_auth_service.dto.response.KeycloakTokenResponse;
+import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,8 @@ import org.springframework.web.client.RestClientException;
 @Component
 @Slf4j
 public class KeycloakAuthClient {
+
+    private static final String ACCOUNT_NON_COMPLETO = "Account is not fully set up";
 
     private final RestClient restClient;
     private final String tokenUrl;
@@ -63,6 +66,14 @@ public class KeycloakAuthClient {
                     .retrieve()
                     .body(KeycloakTokenResponse.class);
         } catch (HttpClientErrorException ex) {
+            //Keycloak controlla le azioni richieste solo dopo aver validato la password:
+            //questa risposta arriva quindi solo a chi ha credenziali corrette ma VERIFY_EMAIL pendente
+            if (ex.getStatusCode() == HttpStatus.BAD_REQUEST
+                    && ex.getResponseBodyAsString().contains(ACCOUNT_NON_COMPLETO)) {
+                log.warn("Login bloccato da Keycloak: email non verificata per username={}", username);
+                throw new EmailNotVerifiedException(
+                        "Email non verificata. Inserisci il codice che ti abbiamo inviato per mail.");
+            }
             if (ex.getStatusCode() == HttpStatus.BAD_REQUEST || ex.getStatusCode() == HttpStatus.UNAUTHORIZED) {
                 log.warn("Tentativo di autenticazione fallito per username={}: status={}", username, ex.getStatusCode());
                 throw new InvalidCredentialsException("Email o password non validi");

@@ -170,7 +170,7 @@ sequenceDiagram
     *   `PUT /api/auth/me/password`: Cambio password (richiede la password attuale per conferma).
     *   `POST /api/auth/me/avatar`: Upload dell'avatar con validazione tipo (JPEG/PNG/WebP, max 5MB).
     *   `DELETE /api/auth/me`: Eliminazione account (DB locale + Keycloak + evento RabbitMQ).
-    *   `POST /api/auth/users/lookup`, `POST /api/auth/users/lookup-by-ids`: Lookup utenti inter-servizio.
+    *   `POST /api/auth/users/lookup-by-ids`: Lookup utenti inter-servizio per Keycloak ID.
 
 ### 4. `catalog-service`
 *   Gestione dell'offerta turistica.

@@ -78,6 +78,39 @@ class RateLimitFilterTest {
     }
 
     @Test
+    void endpointDiversi_contatoriSeparati() throws Exception {
+        //registrazione + verifica + login dello stesso utente non devono esaurire un unico contatore
+        assertEquals(200, esegui(filter, richiestaPostRegister("10.0.0.6")).getStatus());
+        assertEquals(200, esegui(filter, richiestaPostRegister("10.0.0.6")).getStatus());
+
+        MockHttpServletRequest login = new MockHttpServletRequest("POST", "/api/auth/login");
+        login.setRemoteAddr("10.0.0.6");
+        assertEquals(200, esegui(filter, login).getStatus());
+    }
+
+    @Test
+    void refreshNonLimitato() throws Exception {
+        for (int i = 0; i < 5; i++) {
+            MockHttpServletRequest refresh = new MockHttpServletRequest("POST", "/api/auth/refresh");
+            refresh.setRemoteAddr("10.0.0.7");
+            assertEquals(200, esegui(filter, refresh).getStatus());
+        }
+    }
+
+    @Test
+    void xForwardedFor_primoElementoFalsificato_vieneIgnorato() throws Exception {
+        //il gateway accoda l'IP reale: cambiare a ogni richiesta il valore iniziale non aggira il limite
+        for (int i = 0; i < 2; i++) {
+            MockHttpServletRequest richiesta = richiestaPostRegister("10.0.0.8");
+            richiesta.addHeader("X-Forwarded-For", "9.9.9." + i + ", 1.1.1.1");
+            assertEquals(200, esegui(filter, richiesta).getStatus());
+        }
+        MockHttpServletRequest terza = richiestaPostRegister("10.0.0.8");
+        terza.addHeader("X-Forwarded-For", "8.8.8.8, 1.1.1.1");
+        assertEquals(429, esegui(filter, terza).getStatus());
+    }
+
+    @Test
     void filtroDisabilitato_nonBloccaMai() throws Exception {
         RateLimitFilter disabilitato = new RateLimitFilter(false, 1, 60);
 

@@ -10,6 +10,8 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 //Invio delle email applicative tramite il server SMTP configurato (Mailpit in sviluppo).
 //A differenza delle mail gestite da Keycloak, qui controlliamo noi contenuto e template:
@@ -51,15 +53,20 @@ public class MailService {
         invia(to, "Codice per reimpostare la password TripFlow", corpo);
     }
 
-    //Augurio di compleanno con codice sconto del 15% (valido 2 settimane).
-    public void sendBirthdayGreeting(String to, String firstName, String discountCode) {
+    //Augurio di compleanno. Con discountCode null (utente senza diritto al codice) la mail
+    //contiene solo gli auguri. Percentuale del codice: quella del Promotion Code su Stripe.
+    public void sendBirthdayGreeting(String to, String firstName, String discountCode, LocalDate validUntil) {
+        String regalo = discountCode == null ? "" :
+                "<p>Per festeggiare, ecco un <strong>codice sconto</strong> sul tuo prossimo viaggio:</p>" +
+                        boxCodice(discountCode) +
+                        "<p>Inseriscilo nel campo coupon al momento del pagamento entro il <strong>" +
+                        DateTimeFormatter.ofPattern("dd/MM/yyyy").format(validUntil) +
+                        "</strong>: il mondo ti aspetta. ✈️</p>";
         String corpo = baseLayout(
                 "Tanti auguri di buon compleanno! 🎉",
                 saluto(firstName) +
                         "<p>Tutto il team di TripFlow ti augura una splendida giornata.</p>" +
-                        "<p>Per festeggiare, ecco un <strong>codice sconto del 15%</strong> sul tuo prossimo viaggio:</p>" +
-                        boxCodice(discountCode) +
-                        "<p>È valido <strong>2 settimane</strong>: il mondo ti aspetta. ✈️</p>"
+                        regalo
         );
         invia(to, "🎂 Un regalo di compleanno da TripFlow", corpo);
     }
@@ -75,8 +82,8 @@ public class MailService {
             mailSender.send(message);
             log.info("Email inviata a {}: {}", to, oggetto);
         } catch (MailException | jakarta.mail.MessagingException | java.io.UnsupportedEncodingException e) {
-            //non rilanciamo: l'invio email non deve far fallire l'operazione applicativa
-            //(registrazione, reset, job compleanni). Il chiamante decide se compensare.
+            //rilanciamo un'eccezione unchecked: sono i chiamanti (registrazione, reset, job
+            //compleanni) a catturarla, così un invio fallito non fa fallire l'operazione
             log.error("Invio email fallito verso {} ({})", to, oggetto, e);
             throw new MailDeliveryException("Invio email non riuscito", e);
         }

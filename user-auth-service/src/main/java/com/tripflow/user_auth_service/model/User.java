@@ -44,8 +44,12 @@ public class User {
     @Column(nullable = false, length = 30)
     private Role role;
 
+    //non modificabile una volta impostata: è la base del codice sconto di compleanno
     @Column(name = "date_of_birth")
     private LocalDate dateOfBirth;
+
+    @Column(name = "date_of_birth_set_at")
+    private LocalDateTime dateOfBirthSetAt;
 
     @Column(name = "phone_number", length = 30)
     private String phoneNumber;

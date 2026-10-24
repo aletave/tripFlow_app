@@ -45,7 +45,7 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                //Rate limiting sull'endpoint pubblico di registrazione (prima dell'autenticazione)
+                //Rate limiting sugli endpoint pubblici di autenticazione (prima dell'autenticazione)
                 .addFilterBefore(new RateLimitFilter(rateLimitEnabled, maxRequestsPerWindow, rateLimitWindowSeconds),
                         UsernamePasswordAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth

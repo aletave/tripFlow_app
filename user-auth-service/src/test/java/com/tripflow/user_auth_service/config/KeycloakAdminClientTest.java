@@ -8,14 +8,17 @@ import org.junit.jupiter.api.Test;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.net.URI;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -151,6 +154,59 @@ class KeycloakAdminClientTest {
 
         //anche un orfano adottato va ripulito se la registrazione fallisce dopo l'adozione
         verify(keycloak.realm("tripflow").users().get("kc-999")).remove();
+    }
+
+    @Test
+    void createUser_201_richiedeLaVerificaEmailAKeycloak() {
+        Response response = responseConStatus(201);
+        when(response.getLocation()).thenReturn(
+                URI.create("http://localhost:9090/admin/realms/tripflow/users/kc-123"));
+
+        client.createUser(EMAIL, "password", "Mario", "Rossi", "TRAVELER", kcId -> true);
+
+        ArgumentCaptor<UserRepresentation> captor = ArgumentCaptor.forClass(UserRepresentation.class);
+        verify(keycloak.realm("tripflow").users()).create(captor.capture());
+        assertFalse(captor.getValue().isEmailVerified());
+        assertEquals(List.of("VERIFY_EMAIL"), captor.getValue().getRequiredActions());
+    }
+
+    @Test
+    void createUser_409_orfanoAdottato_tornaNonVerificato() {
+        responseConStatus(409);
+        UserRepresentation orfano = new UserRepresentation();
+        orfano.setId("kc-999");
+        when(keycloak.realm("tripflow").users().searchByEmail(eq(EMAIL), eq(true)))
+                .thenReturn(List.of(orfano));
+        UserRepresentation esistente = new UserRepresentation();
+        esistente.setEmailVerified(true);
+        when(keycloak.realm("tripflow").users().get("kc-999").toRepresentation()).thenReturn(esistente);
+
+        client.createUser(EMAIL, "password", "Mario", "Rossi", "TRAVELER", kcId -> true);
+
+        //chi si registra ora non ha dimostrato di possedere l'email: niente stato ereditato
+        verify(keycloak.realm("tripflow").users().get("kc-999")).update(esistente);
+        assertFalse(esistente.isEmailVerified());
+        assertEquals(List.of("VERIFY_EMAIL"), esistente.getRequiredActions());
+    }
+
+    @Test
+    void markEmailVerified_rimuoveLAzioneVerifyEmail() {
+        UserRepresentation utente = new UserRepresentation();
+        utente.setRequiredActions(List.of("VERIFY_EMAIL", "CONFIGURE_TOTP"));
+        when(keycloak.realm("tripflow").users().get("kc-123").toRepresentation()).thenReturn(utente);
+
+        client.markEmailVerified("kc-123");
+
+        assertTrue(utente.isEmailVerified());
+        assertEquals(List.of("CONFIGURE_TOTP"), utente.getRequiredActions());
+        verify(keycloak.realm("tripflow").users().get("kc-123")).update(utente);
+    }
+
+    @Test
+    void logoutAllSessions_chiudeLeSessioniDellUtente() {
+        client.logoutAllSessions("kc-123");
+
+        verify(keycloak.realm("tripflow").users().get("kc-123")).logout();
     }
 
     @Test

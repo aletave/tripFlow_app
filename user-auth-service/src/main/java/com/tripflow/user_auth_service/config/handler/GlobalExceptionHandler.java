@@ -4,6 +4,7 @@ import com.tripflow.user_auth_service.dto.errors.ServiceError;
 import com.tripflow.user_auth_service.exception.EmailAlreadyExistsException;
 import com.tripflow.user_auth_service.exception.EmailNotVerifiedException;
 import com.tripflow.user_auth_service.exception.InvalidCredentialsException;
+import com.tripflow.user_auth_service.exception.InvalidCurrentPasswordException;
 import com.tripflow.user_auth_service.exception.InvalidOtpException;
 import com.tripflow.user_auth_service.exception.KeycloakOperationException;
 import com.tripflow.user_auth_service.exception.ResourceNotFoundException;
@@ -13,9 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -66,6 +70,24 @@ public class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ServiceError onEmailNotVerified(WebRequest req, EmailNotVerifiedException ex) {
         return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCurrentPasswordException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onInvalidCurrentPassword(WebRequest req, InvalidCurrentPasswordException ex) {
+        return errorResponse(req, ex.getMessage());
+    }
+
+    @ExceptionHandler({MissingServletRequestPartException.class, MissingServletRequestParameterException.class})
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ServiceError onParteMancante(WebRequest req, Exception ex) {
+        return errorResponse(req, "Parametro o file obbligatorio mancante");
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    @ResponseStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    public ServiceError onMediaTypeNonSupportato(WebRequest req, HttpMediaTypeNotSupportedException ex) {
+        return errorResponse(req, "Content-Type non supportato: " + ex.getContentType());
     }
 
     @ExceptionHandler(InvalidOtpException.class)

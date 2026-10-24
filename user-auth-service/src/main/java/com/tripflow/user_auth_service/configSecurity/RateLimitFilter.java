@@ -13,21 +13,26 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.Date;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-//Rate limiting per POST /api/auth/register (unico endpoint pubblico): finestra a scadenza per IP.
+//Rate limiting sugli endpoint pubblici attaccabili a forza bruta o usabili per spam di email:
+//finestra a scadenza per coppia (IP, endpoint), così un flusso normale (registrazione,
+//verifica, login) non esaurisce un unico contatore condiviso.
+//Il refresh non è limitato: richiede un refresh token valido e un 429 lì sloggherebbe l'app.
 //Oltre il limite -> 429 con body ServiceError (scritto a mano: i filtri girano prima di Spring MVC).
 @Slf4j
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private static final int MAX_TRACKED_IPS = 1000;
-    private static final String REGISTER_PATH = "/api/auth/register";
-    private static final String LOGIN_PATH = "/api/auth/login";
-    private static final String REFRESH_PATH = "/api/auth/refresh";
-    private static final String FORGOT_PASSWORD_PATH = "/api/auth/forgot-password";
-    private static final String RESET_PASSWORD_PATH = "/api/auth/reset-password";
-    private static final String VERIFY_EMAIL_PATH = "/api/auth/verify-email";
-    private static final String RESEND_VERIFICATION_PATH = "/api/auth/resend-verification";
+    private static final int MAX_TRACKED_KEYS = 1000;
+    private static final Set<String> PERCORSI_LIMITATI = Set.of(
+            "/api/auth/register",
+            "/api/auth/login",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/auth/verify-email",
+            "/api/auth/resend-verification"
+    );
 
     private final boolean enabled;
     private final int maxRequestsPerWindow;
@@ -46,21 +51,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         String uri = request.getRequestURI();
-        boolean isProtectedEndpoint = REGISTER_PATH.equals(uri)
-                || LOGIN_PATH.equals(uri)
-                || REFRESH_PATH.equals(uri)
-                || FORGOT_PASSWORD_PATH.equals(uri)
-                || RESET_PASSWORD_PATH.equals(uri)
-                || VERIFY_EMAIL_PATH.equals(uri)
-                || RESEND_VERIFICATION_PATH.equals(uri);
-        if (!enabled || !"POST".equalsIgnoreCase(request.getMethod()) || !isProtectedEndpoint) {
+        if (!enabled || !"POST".equalsIgnoreCase(request.getMethod()) || !PERCORSI_LIMITATI.contains(uri)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        String ip = ipDelRichiedente(request);
+        String chiave = ipDelRichiedente(request) + " " + uri;
         long now = System.currentTimeMillis();
-        WindowCounter contatore = conteggi.computeIfAbsent(ip, k -> new WindowCounter(now));
+        WindowCounter contatore = conteggi.computeIfAbsent(chiave, k -> new WindowCounter(now));
 
         synchronized (contatore) {
             if (now - contatore.windowStart >= windowMillis) {
@@ -78,17 +76,19 @@ public class RateLimitFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    //Dentro la rete Docker (gateway) l'IP reale del client è nel primo elemento di X-Forwarded-For.
+    //Il gateway accoda a X-Forwarded-For l'IP da cui ha ricevuto la richiesta: l'ultimo elemento
+    //è quindi quello scritto da lui. I precedenti li manda il client e si possono falsificare.
     private String ipDelRichiedente(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
         if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+            String[] ips = forwarded.split(",");
+            return ips[ips.length - 1].trim();
         }
         return request.getRemoteAddr();
     }
 
     private void rispondi429(HttpServletRequest request, HttpServletResponse response) throws IOException {
-        log.warn("Rate limit superato per IP {} su {}", request.getRemoteAddr(), request.getRequestURI());
+        log.warn("Rate limit superato per IP {} su {}", ipDelRichiedente(request), request.getRequestURI());
         response.setStatus(429);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ServiceError errore = new ServiceError(new Date(), request.getRequestURI(),
@@ -98,7 +98,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     //Prune degli IP non più attivi solo quando la mappa cresce: evita memory leak senza overhead per richiesta.
     private void pulisciVociScadute(long now) {
-        if (conteggi.size() <= MAX_TRACKED_IPS) {
+        if (conteggi.size() <= MAX_TRACKED_KEYS) {
             return;
         }
         conteggi.entrySet().removeIf(entry -> now - entry.getValue().windowStart >= windowMillis);

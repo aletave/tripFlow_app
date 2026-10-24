@@ -41,9 +41,11 @@ public class OtpService {
     private final SecureRandom secureRandom = new SecureRandom();
 
     //Genera un nuovo codice, lo salva (come hash) e restituisce il codice in chiaro
-    //al chiamante, che lo inoltrerà via email. Eventuali codici precedenti restano a DB
-    //ma vengono ignorati: la verifica considera solo il più recente non consumato.
+    //al chiamante, che lo inoltrerà via email. I codici precedenti dello stesso scopo
+    //vengono invalidati: vale sempre e solo l'ultimo inviato.
+    @Transactional
     public String issue(String keycloakId, String email, OtpPurpose purpose) {
+        otpRepository.invalidateActive(keycloakId, purpose);
         String code = generaCodice();
 
         EmailOtp otp = new EmailOtp();
@@ -62,6 +64,8 @@ public class OtpService {
 
     //Verifica il codice fornito dall'utente. Lancia InvalidOtpException (messaggio generico)
     //se non esiste, è scaduto, ha superato i tentativi o non corrisponde.
+    //noRollbackFor: il tentativo fallito incrementato va salvato anche se poi si lancia l'eccezione.
+    @Transactional(noRollbackFor = InvalidOtpException.class)
     public void verify(String keycloakId, OtpPurpose purpose, String code) {
         EmailOtp otp = otpRepository
                 .findFirstByKeycloakIdAndPurposeAndConsumedFalseOrderByCreatedAtDesc(keycloakId, purpose)
@@ -83,6 +87,12 @@ public class OtpService {
         otp.setConsumed(true);
         otpRepository.save(otp);
         log.info("OTP {} verificato con successo per keycloak_id={}", purpose, keycloakId);
+    }
+
+    //Elimina tutti i codici dell'utente: chiamato alla cancellazione dell'account.
+    @Transactional
+    public void deleteAllFor(String keycloakId) {
+        otpRepository.deleteByKeycloakId(keycloakId);
     }
 
     //Housekeeping: rimuove periodicamente i codici scaduti o già consumati, così la tabella

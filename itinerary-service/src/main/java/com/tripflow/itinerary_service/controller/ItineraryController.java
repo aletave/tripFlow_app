@@ -4,6 +4,7 @@ import com.tripflow.itinerary_service.configSecurity.SecurityUtils;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
@@ -23,7 +24,7 @@ import java.util.List;
 // - PATCH /{id}/visibility: solo owner
 // - PUT /{id}: owner o utente con condivisione e can_edit=true
 // - DELETE /{id}, shares management: solo owner
-// - GET /public/{id}: accesso pubblico (solo PUBLIC visibility)
+// - GET /public/{token}: accesso pubblico (solo PUBLIC visibility)
 @RestController
 @RequestMapping("/api/itineraries")
 public class ItineraryController {
@@ -51,9 +52,9 @@ public class ItineraryController {
         return itineraryService.getItineraryById(id, SecurityUtils.ownerId());
     }
 
-    @GetMapping("/public/{id}")
-    public ItineraryResponse getPublicItinerary(@PathVariable Long id) {
-        return itineraryService.getPublicItinerary(id);
+    @GetMapping("/public/{token}")
+    public ItineraryResponse getPublicItinerary(@PathVariable java.util.UUID token) {
+        return itineraryService.getPublicItinerary(token);
     }
 
     @GetMapping("/mie")
@@ -97,7 +98,7 @@ public class ItineraryController {
     @PutMapping("/{id}")
     public ItineraryResponse updateItinerary(
             @PathVariable Long id,
-            @Valid @RequestBody CreateItineraryRequest request
+            @Valid @RequestBody UpdateItineraryRequest request
     ) {
         return itineraryService.updateItinerary(id, request, SecurityUtils.ownerId());
     }

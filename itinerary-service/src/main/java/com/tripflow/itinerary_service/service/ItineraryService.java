@@ -4,6 +4,7 @@ import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.ShareItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
@@ -11,6 +12,7 @@ import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.exception.ResourceNotFoundException;
 import com.tripflow.itinerary_service.mapper.ItineraryMapper;
+import com.tripflow.itinerary_service.mapper.ItineraryShareMapper;
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.ItineraryShare;
 import com.tripflow.itinerary_service.model.ItineraryStop;
@@ -40,6 +42,7 @@ public class ItineraryService {
     private final ItineraryStopRepository itineraryStopRepository;
     private final ItineraryShareRepository itineraryShareRepository;
     private final ItineraryMapper itineraryMapper;
+    private final ItineraryShareMapper itineraryShareMapper;
     private final UserAuthClient userAuthClient;
 
     public ItineraryService(
@@ -47,17 +50,20 @@ public class ItineraryService {
             ItineraryStopRepository itineraryStopRepository,
             ItineraryShareRepository itineraryShareRepository,
             ItineraryMapper itineraryMapper,
+            ItineraryShareMapper itineraryShareMapper,
             UserAuthClient userAuthClient
     ) {
         this.itineraryRepository = itineraryRepository;
         this.itineraryStopRepository = itineraryStopRepository;
         this.itineraryShareRepository = itineraryShareRepository;
         this.itineraryMapper = itineraryMapper;
+        this.itineraryShareMapper = itineraryShareMapper;
         this.userAuthClient = userAuthClient;
     }
 
     public ItineraryResponse createItinerary(CreateItineraryRequest request, UUID ownerId) {
-        Itinerary itinerary = itineraryMapper.toEntity(request, ownerId);
+        Visibility visibility = resolveVisibility(request.visibility(), request.isPublic());
+        Itinerary itinerary = itineraryMapper.toEntity(request, ownerId, visibility);
         Itinerary savedItinerary = itineraryRepository.save(itinerary);
         return itineraryMapper.toResponse(savedItinerary);
     }
@@ -67,13 +73,10 @@ public class ItineraryService {
         return itineraryMapper.toResponse(itinerary);
     }
 
-    public ItineraryResponse getPublicItinerary(Long itineraryId) {
-        Itinerary itinerary = itineraryRepository.findById(itineraryId)
-                .orElseThrow(() -> new ResourceNotFoundException("Itinerary not found with id: " + itineraryId));
-
-        if (itinerary.getVisibility() != Visibility.PUBLIC) {
-            throw new AccessDeniedException("Itinerary is not public");
-        }
+    public ItineraryResponse getPublicItinerary(UUID publicToken) {
+        Itinerary itinerary = itineraryRepository
+                .findByPublicTokenAndVisibility(publicToken, Visibility.PUBLIC)
+                .orElseThrow(() -> new ResourceNotFoundException("Public itinerary not found"));
         return itineraryMapper.toResponse(itinerary);
     }
 
@@ -102,6 +105,8 @@ public class ItineraryService {
 
         if (!sharedIds.isEmpty()) {
             itineraryRepository.findAllById(sharedIds)
+                    .stream()
+                    .filter(itinerary -> itinerary.getVisibility() == Visibility.SHARED)
                     .forEach(itinerary -> accessible.putIfAbsent(itinerary.getId(), itinerary));
         }
 
@@ -151,7 +156,7 @@ public class ItineraryService {
         itineraryRepository.delete(itinerary);
     }
 
-    public ItineraryResponse updateItinerary(Long itineraryId, CreateItineraryRequest request, UUID userId) {
+    public ItineraryResponse updateItinerary(Long itineraryId, UpdateItineraryRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         itineraryMapper.updateEntity(request, itinerary);
         Itinerary updated = itineraryRepository.save(itinerary);
@@ -160,7 +165,18 @@ public class ItineraryService {
 
     public ItineraryResponse updateVisibility(Long itineraryId, UpdateVisibilityRequest request, UUID userId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, userId);
-        itinerary.setVisibility(request.resolvedVisibility());
+
+        Visibility visibility = resolveVisibility(request.visibility(), request.isPublic());
+        itinerary.setVisibility(visibility);
+
+        if (visibility == Visibility.PUBLIC) {
+            if (itinerary.getPublicToken() == null) {
+                itinerary.setPublicToken(UUID.randomUUID());
+            }
+        } else {
+            itinerary.setPublicToken(null);
+        }
+
         Itinerary updated = itineraryRepository.save(itinerary);
         return itineraryMapper.toResponse(updated);
     }
@@ -179,21 +195,15 @@ public class ItineraryService {
             throw new IllegalArgumentException("Itinerary already shared with this user");
         }
 
-        ItineraryShare share = new ItineraryShare();
-        share.setItineraryId(itineraryId);
-        share.setSharedWithUserId(request.sharedWithUserId());
-        share.setCanEdit(request.canEdit());
-
+        ItineraryShare share = itineraryShareMapper.toEntity(request, itineraryId);
         ItineraryShare savedShare = itineraryShareRepository.save(share);
 
-        // Fase 1: aggiungere un utente alla condivisione rende l'itinerario SHARED
-        // (qualora non lo fosse gia').
-        if (itinerary.getVisibility() != Visibility.SHARED) {
+        if (itinerary.getVisibility() == Visibility.PRIVATE) {
             itinerary.setVisibility(Visibility.SHARED);
             itineraryRepository.save(itinerary);
         }
 
-        return toShareResponse(savedShare);
+        return itineraryShareMapper.toResponse(savedShare);
     }
 
     public void removeShare(Long itineraryId, UUID sharedWithUserId, UUID ownerId) {
@@ -210,7 +220,7 @@ public class ItineraryService {
 
         return itineraryShareRepository.findByItineraryId(itineraryId)
                 .stream()
-                .map(this::toShareResponse)
+                .map(itineraryShareMapper::toResponse)
                 .toList();
     }
 
@@ -248,6 +258,9 @@ public class ItineraryService {
         if (itinerary.getOwnerId().equals(userId)) {
             return true;
         }
+        if (itinerary.getVisibility() == Visibility.PRIVATE) {
+            return false;
+        }
         if (itinerary.getVisibility() == Visibility.PUBLIC) {
             return true;
         }
@@ -259,17 +272,21 @@ public class ItineraryService {
         if (itinerary.getOwnerId().equals(userId)) {
             return true;
         }
-        Optional<ItineraryShare> share = itineraryShareRepository.findByItineraryIdAndSharedWithUserId(itinerary.getId(), userId);
+        if (itinerary.getVisibility() == Visibility.PRIVATE) {
+            return false;
+        }
+        Optional<ItineraryShare> share = itineraryShareRepository
+                .findByItineraryIdAndSharedWithUserId(itinerary.getId(), userId);
         return share.isPresent() && share.get().isCanEdit();
     }
 
-    private ItineraryShareResponse toShareResponse(ItineraryShare share) {
-        return new ItineraryShareResponse(
-                share.getId(),
-                share.getItineraryId(),
-                share.getSharedWithUserId(),
-                share.isCanEdit(),
-                share.getCreatedAt()
-        );
+    private Visibility resolveVisibility(Visibility visibility, Boolean isPublic) {
+        if (visibility != null) {
+            return visibility;
+        }
+        if (isPublic != null) {
+            return isPublic ? Visibility.PUBLIC : Visibility.PRIVATE;
+        }
+        return Visibility.PRIVATE;
     }
 }

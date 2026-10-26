@@ -27,7 +27,9 @@ public record ItineraryResponse(
 
         LocalDateTime updatedAt,
 
-        List<ItineraryStopResponse> stops
+        List<ItineraryStopResponse> stops,
+
+        UUID publicToken
 
 ) {
 }

@@ -49,6 +49,8 @@ class ItineraryControllerTest {
     private static final String SHARED_USER_SUB = SHARED_USER_ID.toString();
     private static final UUID STRANGER_ID = UUID.fromString("11111111-2222-3333-4444-555555555555");
     private static final String STRANGER_SUB = STRANGER_ID.toString();
+    private static final UUID PUBLIC_TOKEN = UUID.fromString("12345678-1234-1234-1234-123456789012");
+    private static final UUID PRIVATE_TOKEN = UUID.fromString("87654321-4321-4321-4321-210987654321");
 
     @Autowired
     private MockMvc mockMvc;
@@ -69,19 +71,19 @@ class ItineraryControllerTest {
     private ItineraryResponse privateItinerary() {
         return new ItineraryResponse(
                 1L, OWNER_ID, "Vacanza a Roma", "Weekend nel centro storico",
-                Visibility.PRIVATE, null, null, null, null, List.of());
+                Visibility.PRIVATE, null, null, null, null, List.of(), null);
     }
 
     private ItineraryResponse publicItinerary() {
         return new ItineraryResponse(
                 2L, OWNER_ID, "Itinerario Pubblico", "Visibile a tutti",
-                Visibility.PUBLIC, null, null, null, null, List.of());
+                Visibility.PUBLIC, null, null, null, null, List.of(), PUBLIC_TOKEN);
     }
 
     private ItineraryResponse sharedItinerary() {
         return new ItineraryResponse(
                 3L, OWNER_ID, "Itinerario Condiviso", "Condiviso con utente",
-                Visibility.SHARED, null, null, null, null, List.of());
+                Visibility.SHARED, null, null, null, null, List.of(), null);
     }
 
     @Test
@@ -150,25 +152,26 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void getPublicItinerary_publicVisibility_200() throws Exception {
-        when(itineraryService.getPublicItinerary(2L)).thenReturn(publicItinerary());
+    void getPublicItinerary_tokenValido_200() throws Exception {
+        when(itineraryService.getPublicItinerary(PUBLIC_TOKEN)).thenReturn(publicItinerary());
 
-        mockMvc.perform(get("/api/itineraries/public/2"))
+        mockMvc.perform(get("/api/itineraries/public/" + PUBLIC_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(2))
-                .andExpect(jsonPath("$.visibility").value("PUBLIC"));
+                .andExpect(jsonPath("$.visibility").value("PUBLIC"))
+                .andExpect(jsonPath("$.publicToken").value(PUBLIC_TOKEN.toString()));
 
-        verify(itineraryService).getPublicItinerary(2L);
+        verify(itineraryService).getPublicItinerary(PUBLIC_TOKEN);
     }
 
     @Test
-    void getPublicItinerary_privateVisibility_403() throws Exception {
-        when(itineraryService.getPublicItinerary(1L))
-                .thenThrow(new AccessDeniedException("Itinerary is not public"));
+    void getPublicItinerary_tokenNonPubblico_404() throws Exception {
+        when(itineraryService.getPublicItinerary(PRIVATE_TOKEN))
+                .thenThrow(new ResourceNotFoundException("Public itinerary not found"));
 
-        mockMvc.perform(get("/api/itineraries/public/1"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message").value("Itinerary is not public"));
+        mockMvc.perform(get("/api/itineraries/public/" + PRIVATE_TOKEN))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Public itinerary not found"));
     }
 
     @Test
@@ -369,7 +372,6 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "visibility": "PRIVATE",
                   "startDate": "2026-09-01",
                   "endDate": "2026-09-03"
                 }
@@ -393,7 +395,6 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "visibility": "PRIVATE",
                   "startDate": "2026-09-01",
                   "endDate": "2026-09-03"
                 }
@@ -416,7 +417,6 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "visibility": "PRIVATE",
                   "startDate": "2026-09-01",
                   "endDate": "2026-09-03"
                 }

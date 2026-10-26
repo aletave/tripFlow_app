@@ -34,6 +34,9 @@ public class Itinerary {
     @Column(nullable = false, length = 30)
     private Visibility visibility;
 
+    @Column(name = "public_token", unique = true)
+    private UUID publicToken;
+
     @Column(name = "start_date")
     private LocalDate startDate;
 

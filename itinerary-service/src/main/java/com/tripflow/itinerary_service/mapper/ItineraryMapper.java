@@ -2,11 +2,13 @@ package com.tripflow.itinerary_service.mapper;
 
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.ItineraryStop;
+import com.tripflow.itinerary_service.model.Visibility;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -16,20 +18,18 @@ import java.util.UUID;
 public class ItineraryMapper {
 
     //Converte un DTO di richiesta (CreateItineraryRequest)in una Entity Itinerary pronta per il db
-    public Itinerary toEntity(CreateItineraryRequest request, UUID ownerId) {
+    public Itinerary toEntity(CreateItineraryRequest request, UUID ownerId, Visibility visibility) {
 
         Itinerary itinerary = new Itinerary();
 
-        // Copia dati dal DTO alla entity
         itinerary.setTitle(request.title());
         itinerary.setDescription(request.description());
-        itinerary.setVisibility(request.resolvedVisibility());
+        itinerary.setVisibility(visibility);
         itinerary.setStartDate(request.startDate());
         itinerary.setEndDate(request.endDate());
 
         itinerary.setOwnerId(ownerId);
 
-        // Restituisce la entity completa
         return itinerary;
     }
 
@@ -83,7 +83,8 @@ public class ItineraryMapper {
                 itinerary.getEndDate(),
                 itinerary.getCreatedAt(),
                 itinerary.getUpdatedAt(),
-                stops
+                stops,
+                itinerary.getPublicToken()
         );
     }
 
@@ -104,10 +105,9 @@ public class ItineraryMapper {
         );
     }
 
-    public void updateEntity(CreateItineraryRequest request, Itinerary itinerary) {
+    public void updateEntity(UpdateItineraryRequest request, Itinerary itinerary) {
         itinerary.setTitle(request.title());
         itinerary.setDescription(request.description());
-        itinerary.setVisibility(request.resolvedVisibility());
         itinerary.setStartDate(request.startDate());
         itinerary.setEndDate(request.endDate());
     }

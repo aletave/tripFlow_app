@@ -2,6 +2,7 @@ package com.tripflow.itinerary_service.mapper;
 
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
+import com.tripflow.itinerary_service.dto.request.UpdateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
@@ -23,37 +24,17 @@ class ItineraryMapperTest {
     private final ItineraryMapper mapper = new ItineraryMapper();
 
     @Test
-    void toEntity_usaIsPublicQuandoVisibilityAssente() {
+    void toEntity_mappaCampiEVisibilita() {
         CreateItineraryRequest request = new CreateItineraryRequest(
-                "Vacanza", "descrizione", null, true,
+                "Vacanza", "descrizione", Visibility.PUBLIC, true,
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 3));
 
-        Itinerary entity = mapper.toEntity(request, OWNER_ID);
+        Itinerary entity = mapper.toEntity(request, OWNER_ID, Visibility.PUBLIC);
 
         assertThat(entity.getVisibility()).isEqualTo(Visibility.PUBLIC);
         assertThat(entity.getOwnerId()).isEqualTo(OWNER_ID);
         assertThat(entity.getTitle()).isEqualTo("Vacanza");
         assertThat(entity.getStartDate()).isEqualTo(LocalDate.of(2026, 9, 1));
-    }
-
-    @Test
-    void toEntity_enumHaPrioritaSulBooleano() {
-        CreateItineraryRequest request = new CreateItineraryRequest(
-                "Vacanza", null, Visibility.SHARED, true, null, null);
-
-        Itinerary entity = mapper.toEntity(request, OWNER_ID);
-
-        assertThat(entity.getVisibility()).isEqualTo(Visibility.SHARED);
-    }
-
-    @Test
-    void toEntity_senzaVisibilita_defaultPrivate() {
-        CreateItineraryRequest request = new CreateItineraryRequest(
-                "Vacanza", null, null, null, null, null);
-
-        Itinerary entity = mapper.toEntity(request, OWNER_ID);
-
-        assertThat(entity.getVisibility()).isEqualTo(Visibility.PRIVATE);
     }
 
     @Test
@@ -64,6 +45,7 @@ class ItineraryMapperTest {
         itinerary.setTitle("Vacanza");
         itinerary.setDescription("descrizione");
         itinerary.setVisibility(Visibility.PUBLIC);
+        itinerary.setPublicToken(UUID.fromString("12345678-1234-1234-1234-123456789012"));
         itinerary.setStartDate(LocalDate.of(2026, 9, 1));
         itinerary.setEndDate(LocalDate.of(2026, 9, 3));
         itinerary.setCreatedAt(LocalDateTime.of(2026, 8, 1, 10, 0));
@@ -84,6 +66,8 @@ class ItineraryMapperTest {
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.ownerId()).isEqualTo(OWNER_ID);
         assertThat(response.visibility()).isEqualTo(Visibility.PUBLIC);
+        assertThat(response.publicToken())
+                .isEqualTo(UUID.fromString("12345678-1234-1234-1234-123456789012"));
         assertThat(response.stops()).hasSize(1);
         assertThat(response.stops().get(0).customTitle()).isEqualTo("Colosseo");
         assertThat(response.stops().get(0).stopOrder()).isEqualTo(1);
@@ -108,19 +92,19 @@ class ItineraryMapperTest {
     }
 
     @Test
-    void updateEntity_aggiornaCampiERisolveVisibilita() {
+    void updateEntity_aggiornaCampiMaNonToccaLaVisibilita() {
         Itinerary itinerary = new Itinerary();
         itinerary.setVisibility(Visibility.PRIVATE);
 
-        CreateItineraryRequest request = new CreateItineraryRequest(
-                "Nuovo titolo", "nuova descrizione", null, true,
+        UpdateItineraryRequest request = new UpdateItineraryRequest(
+                "Nuovo titolo", "nuova descrizione",
                 LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 5));
 
         mapper.updateEntity(request, itinerary);
 
         assertThat(itinerary.getTitle()).isEqualTo("Nuovo titolo");
         assertThat(itinerary.getDescription()).isEqualTo("nuova descrizione");
-        assertThat(itinerary.getVisibility()).isEqualTo(Visibility.PUBLIC);
+        assertThat(itinerary.getVisibility()).isEqualTo(Visibility.PRIVATE);
         assertThat(itinerary.getStartDate()).isEqualTo(LocalDate.of(2026, 10, 1));
     }
 

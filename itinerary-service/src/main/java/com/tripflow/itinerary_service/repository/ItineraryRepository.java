@@ -2,6 +2,7 @@ package com.tripflow.itinerary_service.repository;
 
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.Visibility;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,6 +13,9 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
 
     // tutti gli itinerari di un owner
     List<Itinerary> findByOwnerId(UUID ownerId);
+
+    @EntityGraph(attributePaths = "stops")
+    Optional<Itinerary> findByPublicTokenAndVisibility(UUID publicToken, Visibility visibility);
 
     // recupera un itinerario specifico dell'owner
     Optional<Itinerary> findByIdAndOwnerId(Long id, UUID ownerId);

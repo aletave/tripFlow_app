@@ -61,6 +61,7 @@ public class ItineraryService {
         this.userAuthClient = userAuthClient;
     }
 
+    @Transactional
     public ItineraryResponse createItinerary(CreateItineraryRequest request, UUID ownerId) {
         Visibility visibility = resolveVisibility(request.visibility(), request.isPublic());
         Itinerary itinerary = itineraryMapper.toEntity(request, ownerId, visibility);
@@ -68,11 +69,13 @@ public class ItineraryService {
         return itineraryMapper.toResponse(savedItinerary);
     }
 
+    @Transactional(readOnly = true)
     public ItineraryResponse getItineraryById(Long itineraryId, UUID userId) {
         Itinerary itinerary = findItineraryWithReadAccess(itineraryId, userId);
         return itineraryMapper.toResponse(itinerary);
     }
 
+    @Transactional(readOnly = true)
     public ItineraryResponse getPublicItinerary(UUID publicToken) {
         Itinerary itinerary = itineraryRepository
                 .findByPublicTokenAndVisibility(publicToken, Visibility.PUBLIC)
@@ -80,6 +83,7 @@ public class ItineraryService {
         return itineraryMapper.toResponse(itinerary);
     }
 
+    @Transactional(readOnly = true)
     public List<ItineraryResponse> getItinerariesByOwner(UUID ownerId) {
         return itineraryRepository.findByOwnerId(ownerId)
                 .stream()
@@ -116,6 +120,7 @@ public class ItineraryService {
                 .toList();
     }
 
+    @Transactional
     public ItineraryStopResponse addStopToItinerary(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         ItineraryStop stop = itineraryMapper.toStopEntity(request, itinerary);
@@ -123,6 +128,7 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(savedStop);
     }
 
+    @Transactional
     public ItineraryStopResponse updateStop(Long itineraryId, Long stopId, UpdateItineraryStopRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
 
@@ -138,6 +144,7 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(updatedStop);
     }
 
+    @Transactional
     public void deleteStop(Long itineraryId, Long stopId, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
 
@@ -151,11 +158,13 @@ public class ItineraryService {
         itineraryStopRepository.delete(stop);
     }
 
+    @Transactional
     public void deleteItinerary(Long itineraryId, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
         itineraryRepository.delete(itinerary);
     }
 
+    @Transactional
     public ItineraryResponse updateItinerary(Long itineraryId, UpdateItineraryRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         itineraryMapper.updateEntity(request, itinerary);
@@ -163,6 +172,7 @@ public class ItineraryService {
         return itineraryMapper.toResponse(updated);
     }
 
+    @Transactional
     public ItineraryResponse updateVisibility(Long itineraryId, UpdateVisibilityRequest request, UUID userId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, userId);
 
@@ -206,6 +216,7 @@ public class ItineraryService {
         return itineraryShareMapper.toResponse(savedShare);
     }
 
+    @Transactional
     public void removeShare(Long itineraryId, UUID sharedWithUserId, UUID ownerId) {
         findOwnedItinerary(itineraryId, ownerId);
 
@@ -215,6 +226,7 @@ public class ItineraryService {
         itineraryShareRepository.deleteByItineraryIdAndSharedWithUserId(itineraryId, sharedWithUserId);
     }
 
+    @Transactional(readOnly = true)
     public List<ItineraryShareResponse> getShares(Long itineraryId, UUID ownerId) {
         findOwnedItinerary(itineraryId, ownerId);
 

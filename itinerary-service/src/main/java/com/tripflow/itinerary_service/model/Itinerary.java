@@ -55,6 +55,7 @@ public class Itinerary {
             cascade = CascadeType.ALL,
             orphanRemoval = true
     )
+    @OrderBy("stopOrder ASC")
     private List<ItineraryStop> stops = new ArrayList<>();
 
     // Costruttore vuoto

@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.configSecurity;
 
+import com.tripflow.itinerary_service.exception.UnauthorizedActionException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -17,12 +18,12 @@ public final class SecurityUtils {
     public static UUID ownerId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth instanceof JwtAuthenticationToken jwtAuth)) {
-            throw new IllegalStateException("Nessun utente autenticato nel contesto di sicurezza");
+            throw new UnauthorizedActionException("Nessun utente autenticato nel contesto di sicurezza");
         }
         try {
             return UUID.fromString(jwtAuth.getToken().getSubject());
         } catch (IllegalArgumentException | NullPointerException e) {
-            throw new IllegalStateException("Il claim 'sub' del token non è un UUID valido");
+            throw new UnauthorizedActionException("Il claim 'sub' del token non è un UUID valido");
         }
     }
 }

@@ -29,7 +29,10 @@ class UserAuthClientTest {
 
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-    private final UserAuthClient client = new UserAuthClient(builder, BASE_URL);
+    private final UserAuthClient client = new UserAuthClient(
+            builder.baseUrl(BASE_URL)
+                    .requestInterceptor(new BearerTokenForwardingInterceptor())
+                    .build());
 
     @AfterEach
     void tearDown() {

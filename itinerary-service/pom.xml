@@ -103,6 +103,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- DB in memoria per i test JPA (@DataJpaTest), es. la cancellazione reale delle tappe -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <build>

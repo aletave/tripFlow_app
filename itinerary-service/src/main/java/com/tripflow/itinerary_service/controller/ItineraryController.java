@@ -10,6 +10,7 @@ import com.tripflow.itinerary_service.dto.request.UpdateVisibilityRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryShareResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
+import com.tripflow.itinerary_service.dto.response.PublicItineraryResponse;
 import com.tripflow.itinerary_service.service.ItineraryService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
@@ -36,6 +37,7 @@ public class ItineraryController {
     }
 
     @PostMapping
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ItineraryResponse createItinerary(
             @Valid @RequestBody CreateItineraryRequest request
     ) {
@@ -53,7 +55,7 @@ public class ItineraryController {
     }
 
     @GetMapping("/public/{token}")
-    public ItineraryResponse getPublicItinerary(@PathVariable java.util.UUID token) {
+    public PublicItineraryResponse getPublicItinerary(@PathVariable java.util.UUID token) {
         return itineraryService.getPublicItinerary(token);
     }
 
@@ -63,6 +65,7 @@ public class ItineraryController {
     }
 
     @PostMapping("/{id}/stops")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ItineraryStopResponse addStopToItinerary(
             @PathVariable Long id,
             @Valid @RequestBody AddItineraryStopRequest request
@@ -109,6 +112,7 @@ public class ItineraryController {
     }
 
     @PostMapping("/{id}/shares")
+    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
     public ItineraryShareResponse shareItinerary(
             @PathVariable Long id,
             @Valid @RequestBody ShareItineraryRequest request

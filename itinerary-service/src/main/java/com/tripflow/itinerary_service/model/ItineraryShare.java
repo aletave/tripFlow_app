@@ -34,6 +34,7 @@ public class ItineraryShare {
 
     @PrePersist
     public void prePersist() {
-        createdAt = LocalDateTime.now();
+        // Timestamp in UTC, coerente con Itinerary.createdAt.
+        createdAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
     }
 }

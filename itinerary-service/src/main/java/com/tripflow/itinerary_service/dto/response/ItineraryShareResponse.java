@@ -1,6 +1,6 @@
 package com.tripflow.itinerary_service.dto.response;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 public record ItineraryShareResponse(
@@ -8,6 +8,6 @@ public record ItineraryShareResponse(
         Long itineraryId,
         UUID sharedWithUserId,
         boolean canEdit,
-        LocalDateTime createdAt
+        OffsetDateTime createdAt
 ) {
 }

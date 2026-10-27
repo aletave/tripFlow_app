@@ -6,11 +6,15 @@ import com.tripflow.itinerary_service.dto.request.UpdateItineraryRequest;
 import com.tripflow.itinerary_service.dto.request.UpdateItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
 import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
+import com.tripflow.itinerary_service.dto.response.PublicItineraryResponse;
 import com.tripflow.itinerary_service.model.Itinerary;
 import com.tripflow.itinerary_service.model.ItineraryStop;
 import com.tripflow.itinerary_service.model.Visibility;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -66,6 +70,10 @@ public class ItineraryMapper {
 
     //Converte una Entity Itinerary in un DTO Response da restituire al frontend.
     public ItineraryResponse toResponse(Itinerary itinerary) {
+        return toResponse(itinerary, false);
+    }
+
+    public ItineraryResponse toResponse(Itinerary itinerary, boolean canEdit) {
 
         List<ItineraryStopResponse> stops =
                 itinerary.getStops()
@@ -81,11 +89,31 @@ public class ItineraryMapper {
                 itinerary.getVisibility(),
                 itinerary.getStartDate(),
                 itinerary.getEndDate(),
-                itinerary.getCreatedAt(),
-                itinerary.getUpdatedAt(),
+                toUtc(itinerary.getCreatedAt()),
+                toUtc(itinerary.getUpdatedAt()),
                 stops,
-                itinerary.getPublicToken()
+                itinerary.getPublicToken(),
+                canEdit
         );
+    }
+
+    // Vista ridotta per il link pubblico: nessun dato sull'owner o sui permessi.
+    public PublicItineraryResponse toPublicResponse(Itinerary itinerary) {
+        return new PublicItineraryResponse(
+                itinerary.getId(),
+                itinerary.getTitle(),
+                itinerary.getDescription(),
+                itinerary.getStartDate(),
+                itinerary.getEndDate(),
+                itinerary.getStops().stream().map(this::toStopResponse).toList()
+        );
+    }
+
+    // I timestamp tecnici (createdAt/updatedAt) sono salvati in UTC come LocalDateTime:
+    // in uscita si esplicita l'offset (es. "2026-10-27T11:15:00Z") cosi' il client
+    // puo' convertirli correttamente nell'ora italiana senza ambiguita'.
+    public static OffsetDateTime toUtc(LocalDateTime utcDateTime) {
+        return utcDateTime != null ? utcDateTime.atOffset(ZoneOffset.UTC) : null;
     }
 
     //Converte una singola Entity ItineraryStop in un DTO ItineraryStopResponse.
@@ -116,14 +144,19 @@ public class ItineraryMapper {
         if (request.stopOrder() != null) {
             stop.setStopOrder(request.stopOrder());
         }
-        if (request.stopType() != null) {
+        if (request.stopType() != null && !request.stopType().equals(stop.getStopType())) {
+            // Cambio di tipo: i riferimenti precedenti non sono piu' coerenti
+            // (es. TRIP -> CUSTOM) e vengono sostituiti da quelli della richiesta.
             stop.setStopType(request.stopType());
-        }
-        if (request.viaggioId() != null) {
             stop.setViaggioId(request.viaggioId());
-        }
-        if (request.attivitaId() != null) {
             stop.setAttivitaId(request.attivitaId());
+        } else {
+            if (request.viaggioId() != null) {
+                stop.setViaggioId(request.viaggioId());
+            }
+            if (request.attivitaId() != null) {
+                stop.setAttivitaId(request.attivitaId());
+            }
         }
         if (request.customTitle() != null) {
             stop.setCustomTitle(request.customTitle());

@@ -65,14 +65,15 @@ public class Itinerary {
     // viene eseguito prima di salvare per la prima volta un oggetto nel DB
     @PrePersist
     public void prePersist() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
+        // Timestamp sempre in UTC: la conversione in ora locale spetta al client.
+        createdAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        updatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
     }
 
     // viene eseguito prima di aggiornare un oggetto nel DB
     @PreUpdate
     public void preUpdate() {
-        updatedAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
     }
 
 

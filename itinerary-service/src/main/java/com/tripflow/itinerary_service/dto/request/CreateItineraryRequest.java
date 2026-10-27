@@ -2,6 +2,7 @@ package com.tripflow.itinerary_service.dto.request;
 
 import com.tripflow.itinerary_service.model.Visibility;
 import com.tripflow.itinerary_service.validation.DateRange;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -20,8 +21,10 @@ public record CreateItineraryRequest(
 
         Boolean isPublic,
 
+        @FutureOrPresent(message = "La data di inizio dell'itinerario non puo' essere nel passato")
         LocalDate startDate,
 
+        @FutureOrPresent(message = "La data di fine dell'itinerario non puo' essere nel passato")
         LocalDate endDate
 
 ) {

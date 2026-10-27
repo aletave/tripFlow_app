@@ -22,7 +22,7 @@ public class ItineraryShareMapper {
                 share.getItineraryId(),
                 share.getSharedWithUserId(),
                 share.isCanEdit(),
-                share.getCreatedAt()
+                ItineraryMapper.toUtc(share.getCreatedAt())
         );
     }
 }

@@ -2,7 +2,7 @@ package com.tripflow.itinerary_service.dto.response;
 
 import com.tripflow.itinerary_service.model.Visibility;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,13 +23,15 @@ public record ItineraryResponse(
 
         LocalDate endDate,
 
-        LocalDateTime createdAt,
+        OffsetDateTime createdAt,
 
-        LocalDateTime updatedAt,
+        OffsetDateTime updatedAt,
 
         List<ItineraryStopResponse> stops,
 
-        UUID publicToken
+        UUID publicToken,
+
+        boolean canEdit
 
 ) {
 }

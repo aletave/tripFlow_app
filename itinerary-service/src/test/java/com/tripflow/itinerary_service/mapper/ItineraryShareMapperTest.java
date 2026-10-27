@@ -43,6 +43,8 @@ class ItineraryShareMapperTest {
         assertThat(response.itineraryId()).isEqualTo(1L);
         assertThat(response.sharedWithUserId()).isEqualTo(SHARED_USER_ID);
         assertThat(response.canEdit()).isTrue();
-        assertThat(response.createdAt()).isEqualTo(createdAt);
+        // createdAt e' salvato in UTC e viene esposto con offset esplicito (Z)
+        assertThat(response.createdAt()).isEqualTo(createdAt.atOffset(java.time.ZoneOffset.UTC));
+        assertThat(response.createdAt().toString()).isEqualTo("2026-10-01T10:00Z");
     }
 }

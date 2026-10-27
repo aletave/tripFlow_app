@@ -29,8 +29,10 @@ import java.security.interfaces.RSAPublicKey;
 import java.util.List;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -63,27 +65,27 @@ class ItineraryControllerTest {
               "title": "Vacanza a Roma",
               "description": "Weekend nel centro storico",
               "visibility": "PRIVATE",
-              "startDate": "2026-09-01",
-              "endDate": "2026-09-03"
+              "startDate": "2030-09-01",
+              "endDate": "2030-09-03"
             }
             """;
 
     private ItineraryResponse privateItinerary() {
         return new ItineraryResponse(
                 1L, OWNER_ID, "Vacanza a Roma", "Weekend nel centro storico",
-                Visibility.PRIVATE, null, null, null, null, List.of(), null);
+                Visibility.PRIVATE, null, null, null, null, List.of(), null, false);
     }
 
     private ItineraryResponse publicItinerary() {
         return new ItineraryResponse(
                 2L, OWNER_ID, "Itinerario Pubblico", "Visibile a tutti",
-                Visibility.PUBLIC, null, null, null, null, List.of(), PUBLIC_TOKEN);
+                Visibility.PUBLIC, null, null, null, null, List.of(), PUBLIC_TOKEN, false);
     }
 
     private ItineraryResponse sharedItinerary() {
         return new ItineraryResponse(
                 3L, OWNER_ID, "Itinerario Condiviso", "Condiviso con utente",
-                Visibility.SHARED, null, null, null, null, List.of(), null);
+                Visibility.SHARED, null, null, null, null, List.of(), null, false);
     }
 
     @Test
@@ -94,7 +96,7 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(CREATE_BODY))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.ownerId").value(OWNER_SUB))
                 .andExpect(jsonPath("$.title").value("Vacanza a Roma"));
 
@@ -122,7 +124,9 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(3))
-                .andExpect(jsonPath("$.ownerId").value(OWNER_SUB));
+                .andExpect(jsonPath("$.ownerId").value(OWNER_SUB))
+                // il FE legge canEdit per mostrare/nascondere i pulsanti di modifica
+                .andExpect(jsonPath("$.canEdit").value(false));
 
         verify(itineraryService).getItineraryById(3L, SHARED_USER_ID);
     }
@@ -153,13 +157,18 @@ class ItineraryControllerTest {
 
     @Test
     void getPublicItinerary_tokenValido_200() throws Exception {
-        when(itineraryService.getPublicItinerary(PUBLIC_TOKEN)).thenReturn(publicItinerary());
+        when(itineraryService.getPublicItinerary(PUBLIC_TOKEN)).thenReturn(
+                new com.tripflow.itinerary_service.dto.response.PublicItineraryResponse(
+                        2L, "Itinerario Pubblico", "Visibile a tutti", null, null, List.of()));
 
         mockMvc.perform(get("/api/itineraries/public/" + PUBLIC_TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(2))
-                .andExpect(jsonPath("$.visibility").value("PUBLIC"))
-                .andExpect(jsonPath("$.publicToken").value(PUBLIC_TOKEN.toString()));
+                .andExpect(jsonPath("$.title").value("Itinerario Pubblico"))
+                // il link pubblico non deve esporre dati sull'owner o sui permessi
+                .andExpect(jsonPath("$.ownerId").doesNotExist())
+                .andExpect(jsonPath("$.canEdit").doesNotExist())
+                .andExpect(jsonPath("$.publicToken").doesNotExist());
 
         verify(itineraryService).getPublicItinerary(PUBLIC_TOKEN);
     }
@@ -202,15 +211,15 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void createItinerary_conSoloIsPublic_200() throws Exception {
+    void createItinerary_conSoloIsPublic_201() throws Exception {
         when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(publicItinerary());
 
         String body = """
                 {
                   "title": "Solo booleano",
                   "isPublic": true,
-                  "startDate": "2026-09-01",
-                  "endDate": "2026-09-03"
+                  "startDate": "2030-09-01",
+                  "endDate": "2030-09-03"
                 }
                 """;
 
@@ -218,7 +227,7 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
     }
@@ -237,15 +246,28 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void createItinerary_visibilityMinuscola_200() throws Exception {
+    void updateVisibility_senzaCampi_400() throws Exception {
+        mockMvc.perform(patch("/api/itineraries/1/visibility")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString(
+                        "Almeno uno tra visibility e isPublic deve essere specificato")));
+
+        verify(itineraryService, never()).updateVisibility(any(), any(), any());
+    }
+
+    @Test
+    void createItinerary_visibilityMinuscola_201() throws Exception {
         when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(publicItinerary());
 
         String body = """
                 {
                   "title": "Visibilita' minuscola",
                   "visibility": "public",
-                  "startDate": "2026-09-01",
-                  "endDate": "2026-09-03"
+                  "startDate": "2030-09-01",
+                  "endDate": "2030-09-03"
                 }
                 """;
 
@@ -253,7 +275,7 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
     }
@@ -272,7 +294,7 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void addStopToItinerary_owner_200() throws Exception {
+    void addStopToItinerary_owner_201() throws Exception {
         String stopBody = """
                 {
                   "stopOrder": 1,
@@ -280,8 +302,8 @@ class ItineraryControllerTest {
                   "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                   "customTitle": "Visita Colosseo",
                   "customDescription": "Tour guidato",
-                  "startDatetime": "2026-09-01T10:00:00",
-                  "endDatetime": "2026-09-01T12:00:00"
+                  "startDatetime": "2030-09-01T10:00:00",
+                  "endDatetime": "2030-09-01T12:00:00"
                 }
                 """;
 
@@ -289,13 +311,13 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(stopBody))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         verify(itineraryService).addStopToItinerary(eq(1L), any(), eq(OWNER_ID));
     }
 
     @Test
-    void addStopToItinerary_sharedUserWithEditAccess_200() throws Exception {
+    void addStopToItinerary_sharedUserWithEditAccess_201() throws Exception {
         String stopBody = """
                 {
                   "stopOrder": 1,
@@ -303,8 +325,8 @@ class ItineraryControllerTest {
                   "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                   "customTitle": "Visita Colosseo",
                   "customDescription": "Tour guidato",
-                  "startDatetime": "2026-09-01T10:00:00",
-                  "endDatetime": "2026-09-01T12:00:00"
+                  "startDatetime": "2030-09-01T10:00:00",
+                  "endDatetime": "2030-09-01T12:00:00"
                 }
                 """;
 
@@ -312,7 +334,7 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(SHARED_USER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(stopBody))
-                .andExpect(status().isOk());
+                .andExpect(status().isCreated());
 
         verify(itineraryService).addStopToItinerary(eq(3L), any(), eq(SHARED_USER_ID));
     }
@@ -326,8 +348,8 @@ class ItineraryControllerTest {
                   "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                   "customTitle": "Visita Colosseo",
                   "customDescription": "Tour guidato",
-                  "startDatetime": "2026-09-01T10:00:00",
-                  "endDatetime": "2026-09-01T12:00:00"
+                  "startDatetime": "2030-09-01T10:00:00",
+                  "endDatetime": "2030-09-01T12:00:00"
                 }
                 """;
 
@@ -351,8 +373,8 @@ class ItineraryControllerTest {
                   "attivitaId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                   "customTitle": "Visita Colosseo",
                   "customDescription": "Tour guidato",
-                  "startDatetime": "2026-09-01T10:00:00",
-                  "endDatetime": "2026-09-01T12:00:00"
+                  "startDatetime": "2030-09-01T10:00:00",
+                  "endDatetime": "2030-09-01T12:00:00"
                 }
                 """;
 
@@ -372,8 +394,8 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "startDate": "2026-09-01",
-                  "endDate": "2026-09-03"
+                  "startDate": "2030-09-01",
+                  "endDate": "2030-09-03"
                 }
                 """;
 
@@ -395,8 +417,8 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "startDate": "2026-09-01",
-                  "endDate": "2026-09-03"
+                  "startDate": "2030-09-01",
+                  "endDate": "2030-09-03"
                 }
                 """;
 
@@ -417,8 +439,8 @@ class ItineraryControllerTest {
                 {
                   "title": "Titolo Aggiornato",
                   "description": "Nuova descrizione",
-                  "startDate": "2026-09-01",
-                  "endDate": "2026-09-03"
+                  "startDate": "2030-09-01",
+                  "endDate": "2030-09-03"
                 }
                 """;
 
@@ -473,6 +495,12 @@ class ItineraryControllerTest {
     }
 
     @Test
+    void swaggerSenzaToken_401() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void corsPreflight_daGateway_rispondeConAccessControlAllowOrigin() throws Exception {
         mockMvc.perform(options("/api/itineraries")
                         .header(HttpHeaders.ORIGIN, "http://localhost:8080")
@@ -491,6 +519,26 @@ class ItineraryControllerTest {
                         .header(HttpHeaders.ORIGIN, "http://localhost:8080"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:8080"));
+    }
+
+    @Test
+    void corsPreflight_originNonAutorizzato_403() throws Exception {
+        mockMvc.perform(options("/api/itineraries")
+                        .header(HttpHeaders.ORIGIN, "https://evil.example")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    void corsPreflight_allowCredentialsFalse_nonEsponeHeaderCredenziali() throws Exception {
+        mockMvc.perform(options("/api/itineraries")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:8080")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "GET")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS));
     }
 
     @Test
@@ -548,7 +596,7 @@ class ItineraryControllerTest {
     }
 
     @Test
-    void shareItinerary_utenteValido_200() throws Exception {
+    void shareItinerary_utenteValido_201() throws Exception {
         ItineraryShareResponse response = new ItineraryShareResponse(10L, 1L, SHARED_USER_ID, true, null);
         when(itineraryService.shareItinerary(eq(1L), any(), eq(OWNER_ID))).thenReturn(response);
 
@@ -556,7 +604,7 @@ class ItineraryControllerTest {
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sharedWithUserId\":\"" + SHARED_USER_ID + "\",\"canEdit\":true}"))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.sharedWithUserId").value(SHARED_USER_SUB))
                 .andExpect(jsonPath("$.canEdit").value(true));
 
@@ -612,6 +660,96 @@ class ItineraryControllerTest {
                         .content(CREATE_BODY))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Conflitto con i dati esistenti"));
+    }
+
+    @Test
+    void createItinerary_fineAntecedenteAllInizio_400ConMessaggioChiaro() throws Exception {
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Date invertite\",\"startDate\":\"2030-09-10\",\"endDate\":\"2030-09-01\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("endDate : La data di fine non puo' essere precedente alla data di inizio"));
+
+        verify(itineraryService, never()).createItinerary(any(), any());
+    }
+
+    @Test
+    void createItinerary_dataInizioNelPassato_400ConMessaggioChiaro() throws Exception {
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Nel passato\",\"startDate\":\"2020-01-01\",\"endDate\":\"2030-01-03\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("startDate : La data di inizio dell'itinerario non puo' essere nel passato"));
+    }
+
+    @Test
+    void addStop_stopTypeNonValido_400ConMessaggioDescrittivo() throws Exception {
+        when(itineraryService.addStopToItinerary(eq(1L), any(), eq(OWNER_ID)))
+                .thenThrow(new IllegalArgumentException("stopType non valido: custom. Valori ammessi: TRIP, ACTIVITY, CUSTOM (maiuscolo)"));
+
+        mockMvc.perform(post("/api/itineraries/1/stops")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "stopOrder": 1,
+                                  "stopType": "custom",
+                                  "startDatetime": "2030-09-01T10:00:00",
+                                  "endDatetime": "2030-09-01T12:00:00"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("stopType non valido: custom. Valori ammessi: TRIP, ACTIVITY, CUSTOM (maiuscolo)"));
+    }
+
+    @Test
+    void addStop_vincoloCheckDatabase_400InveceDi409() throws Exception {
+        when(itineraryService.addStopToItinerary(eq(1L), any(), eq(OWNER_ID)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "new row for relation \"itinerary_stops\" violates check constraint \"chk_stop_reference\""));
+
+        mockMvc.perform(post("/api/itineraries/1/stops")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "stopOrder": 1,
+                                  "stopType": "TRIP",
+                                  "startDatetime": "2030-09-01T10:00:00",
+                                  "endDatetime": "2030-09-01T12:00:00"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.startsWith("Riferimenti della tappa incoerenti")));
+    }
+
+    @Test
+    void illegalArgumentSenzaMessaggio_400ConMessaggioNonVuoto() throws Exception {
+        when(itineraryService.getItineraryById(1L, OWNER_ID)).thenThrow(new IllegalArgumentException());
+
+        mockMvc.perform(get("/api/itineraries/1").with(jwt().jwt(j -> j.subject(OWNER_SUB))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Richiesta non valida"));
+    }
+
+    @Test
+    void createItinerary_restituisceCreatedAtInUtcConOffset() throws Exception {
+        ItineraryResponse withTimestamps = new ItineraryResponse(
+                1L, OWNER_ID, "Vacanza a Roma", null, Visibility.PRIVATE, null, null,
+                java.time.OffsetDateTime.of(2026, 10, 27, 11, 15, 0, 0, java.time.ZoneOffset.UTC),
+                java.time.OffsetDateTime.of(2026, 10, 27, 11, 15, 0, 0, java.time.ZoneOffset.UTC),
+                List.of(), null, true);
+        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(withTimestamps);
+
+        mockMvc.perform(post("/api/itineraries")
+                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(CREATE_BODY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.createdAt").value("2026-10-27T11:15:00Z"))
+                .andExpect(jsonPath("$.canEdit").value(true));
     }
 
     @TestConfiguration

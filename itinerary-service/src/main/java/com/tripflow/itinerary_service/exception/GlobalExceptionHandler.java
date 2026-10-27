@@ -5,113 +5,173 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Date;
+import java.time.Instant;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 //Global Exception Handler per il itinerary-service.
-
+//Ogni errore restituisce lo stesso contratto JSON (ServiceError):
+//timestamp, status, error, message, path.
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ServiceError onResourceNotFound(WebRequest req, ResourceNotFoundException ex) {
-        return errorResponse(req, ex.getMessage());
+    public ResponseEntity<ServiceError> onResourceNotFound(WebRequest req, ResourceNotFoundException ex) {
+        return errorResponse(HttpStatus.NOT_FOUND, req, safeMessage(ex.getMessage(), "Risorsa non trovata"), ex);
     }
 
     @ExceptionHandler(UserAuthServiceUnavailableException.class)
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    public ServiceError onUserAuthUnavailable(WebRequest req, UserAuthServiceUnavailableException ex) {
-        return errorResponse(req, ex.getMessage());
+    public ResponseEntity<ServiceError> onUserAuthUnavailable(WebRequest req, UserAuthServiceUnavailableException ex) {
+        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE, req,
+                safeMessage(ex.getMessage(), "Servizio esterno non disponibile"), ex);
     }
 
     // Parametri non validi a livello applicativo (es. condivisione duplicata):
     // e' un errore del client, quindi 400 e non 500.
     @ExceptionHandler(IllegalArgumentException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onIllegalArgument(WebRequest req, IllegalArgumentException ex) {
-        return errorResponse(req, ex.getMessage());
+    public ResponseEntity<ServiceError> onIllegalArgument(WebRequest req, IllegalArgumentException ex) {
+        return errorResponse(HttpStatus.BAD_REQUEST, req, safeMessage(ex.getMessage(), "Richiesta non valida"), ex);
     }
 
-    // Violazioni di vincoli del database (unicita', foreign key, check...):
-    // 409 Conflict. Non esponiamo i dettagli del DB al client.
+    // Stato applicativo incompatibile con l'operazione richiesta: 409.
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ServiceError> onIllegalState(WebRequest req, IllegalStateException ex) {
+        return errorResponse(HttpStatus.CONFLICT, req,
+                safeMessage(ex.getMessage(), "Operazione non consentita nello stato attuale"), ex);
+    }
+
+    // Violazioni di vincoli del database (unicita', foreign key, check...).
+    // Il Service valida gia' questi casi; qui resta una rete di sicurezza che
+    // traduce i vincoli noti in un messaggio chiaro senza esporre i dettagli del DB:
+    // - CHECK su tipo/riferimenti della tappa: dato inviato non valido -> 400
+    // - UNIQUE / altri vincoli: conflitto con dati esistenti -> 409
     @ExceptionHandler(DataIntegrityViolationException.class)
-    @ResponseStatus(HttpStatus.CONFLICT)
-    public ServiceError onDataIntegrityViolation(WebRequest req, DataIntegrityViolationException ex) {
-        return errorResponse(req, "Conflitto con i dati esistenti");
+    public ResponseEntity<ServiceError> onDataIntegrityViolation(WebRequest req, DataIntegrityViolationException ex) {
+        String detail = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase(java.util.Locale.ROOT);
+        if (detail.contains("chk_stop_type")) {
+            return errorResponse(HttpStatus.BAD_REQUEST, req,
+                    "stopType non valido. Valori ammessi: TRIP, ACTIVITY, CUSTOM (maiuscolo)", ex);
+        }
+        if (detail.contains("chk_stop_reference")) {
+            return errorResponse(HttpStatus.BAD_REQUEST, req,
+                    "Riferimenti della tappa incoerenti: TRIP richiede solo viaggioId, ACTIVITY solo attivitaId, "
+                            + "CUSTOM nessuno dei due", ex);
+        }
+        if (detail.contains("chk_visibility")) {
+            return errorResponse(HttpStatus.BAD_REQUEST, req,
+                    "visibility non valida. Valori ammessi: PUBLIC, PRIVATE, SHARED", ex);
+        }
+        if (detail.contains("unique_itinerary_stop_order")) {
+            return errorResponse(HttpStatus.CONFLICT, req,
+                    "Esiste gia' una tappa con lo stesso stopOrder in questo itinerario", ex);
+        }
+        if (detail.contains("uk_itinerary_share")) {
+            return errorResponse(HttpStatus.CONFLICT, req, "Itinerario gia' condiviso con questo utente", ex);
+        }
+        return errorResponse(HttpStatus.CONFLICT, req, "Conflitto con i dati esistenti", ex);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    @ResponseStatus(HttpStatus.FORBIDDEN)
-    public ServiceError onAccessDenied(WebRequest req, AccessDeniedException ex) {
-        return errorResponse(req, ex.getMessage());
+    public ResponseEntity<ServiceError> onAccessDenied(WebRequest req, AccessDeniedException ex) {
+        return errorResponse(HttpStatus.FORBIDDEN, req, safeMessage(ex.getMessage(), "Accesso negato"), ex);
+    }
+
+    @ExceptionHandler(UnauthorizedActionException.class)
+    public ResponseEntity<ServiceError> onUnauthorizedAction(WebRequest req, UnauthorizedActionException ex) {
+        return errorResponse(HttpStatus.UNAUTHORIZED, req, safeMessage(ex.getMessage(), "Autenticazione richiesta"), ex);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onMethodArgumentNotValid(WebRequest req, MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(viol -> viol.getField().concat(" : ")
-                        .concat(viol.getDefaultMessage()))
+    public ResponseEntity<ServiceError> onMethodArgumentNotValid(WebRequest req, MethodArgumentNotValidException ex) {
+        String message = Stream.concat(
+                        ex.getBindingResult().getFieldErrors().stream()
+                                .map(viol -> viol.getField() + " : " + viol.getDefaultMessage()),
+                        ex.getBindingResult().getGlobalErrors().stream()
+                                .map(viol -> viol.getObjectName() + " : " + viol.getDefaultMessage())
+                )
                 .collect(Collectors.joining(" , "));
-        return errorResponse(req, message);
+
+        return errorResponse(HttpStatus.BAD_REQUEST, req,
+                safeMessage(message, "Richiesta non valida"), ex);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onBodyIlleggibile(WebRequest req, HttpMessageNotReadableException ex) {
-        return errorResponse(req, "Corpo della richiesta non leggibile o JSON malformato");
+    public ResponseEntity<ServiceError> onBodyIlleggibile(WebRequest req, HttpMessageNotReadableException ex) {
+        return errorResponse(HttpStatus.BAD_REQUEST, req,
+                "Corpo della richiesta non leggibile o JSON malformato", ex);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ServiceError onTypeMismatch(WebRequest req, MethodArgumentTypeMismatchException ex) {
+    public ResponseEntity<ServiceError> onTypeMismatch(WebRequest req, MethodArgumentTypeMismatchException ex) {
         String tipoAtteso = ex.getRequiredType() != null
                 ? ex.getRequiredType().getSimpleName()
                 : "valore valido";
         String message = "Parametro '" + ex.getName() + "' non valido: atteso un " + tipoAtteso;
-        return errorResponse(req, message);
+        return errorResponse(HttpStatus.BAD_REQUEST, req, message, ex);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ServiceError onRisorsaNonTrovata(WebRequest req, NoResourceFoundException ex) {
-        //URL inesistente: prima finiva sul 500 generico, ma è un errore del client
-        return errorResponse(req, "Risorsa non trovata: " + ex.getResourcePath());
+    public ResponseEntity<ServiceError> onRisorsaNonTrovata(WebRequest req, NoResourceFoundException ex) {
+        //URL inesistente: prima finiva sul 500 generico, ma e' un errore del client
+        return errorResponse(HttpStatus.NOT_FOUND, req,
+                "Risorsa non trovata: " + ex.getResourcePath(), ex);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    @ResponseStatus(HttpStatus.METHOD_NOT_ALLOWED)
-    public ServiceError onMetodoNonSupportato(WebRequest req, HttpRequestMethodNotSupportedException ex) {
-        return errorResponse(req, "Metodo HTTP non supportato: " + ex.getMethod());
+    public ResponseEntity<ServiceError> onMetodoNonSupportato(WebRequest req, HttpRequestMethodNotSupportedException ex) {
+        return errorResponse(HttpStatus.METHOD_NOT_ALLOWED, req,
+                "Metodo HTTP non supportato: " + ex.getMethod(), ex);
     }
 
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ServiceError defaultErrorHandler(WebRequest req, Exception ex) {
-        log.error("Errore non gestito", ex);
+    public ResponseEntity<ServiceError> defaultErrorHandler(WebRequest req, Exception ex) {
         //al client non esponiamo i dettagli interni dell'errore, solo un messaggio generico
-        return errorResponse(req, "Errore interno del server");
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, req, "Errore interno del server", ex);
     }
 
-    private ServiceError errorResponse(WebRequest req, String message) {
+    private ResponseEntity<ServiceError> errorResponse(
+            HttpStatus status,
+            WebRequest req,
+            String message,
+            Exception ex
+    ) {
+        String path = resolvePath(req);
+        ServiceError body = new ServiceError(
+                Instant.now(),
+                status.value(),
+                status.getReasonPhrase(),
+                message,
+                path
+        );
+
+        if (status.is5xxServerError()) {
+            log.error("Errore {} su {}: {}", status.value(), path, message, ex);
+        } else {
+            log.warn("Richiesta rifiutata {} su {}: {}", status.value(), path, message);
+        }
+
+        return ResponseEntity.status(status).body(body);
+    }
+
+    private String resolvePath(WebRequest req) {
         //fuori dal contesto servlet resolveReference può dare null: si evita l'NPE
-        HttpServletRequest httpreq = (HttpServletRequest) req.resolveReference("request");
-        String path = httpreq != null ? httpreq.getRequestURI() : "sconosciuto";
-        ServiceError output = new ServiceError(new Date(), path, message);
-        log.error("Exception handler :::: {}", output);
-        return output;
+        HttpServletRequest httpReq = (HttpServletRequest) req.resolveReference("request");
+        return httpReq != null ? httpReq.getRequestURI() : "sconosciuto";
+    }
+
+    private String safeMessage(String message, String fallback) {
+        return message != null && !message.isBlank() ? message : fallback;
     }
 }

@@ -34,6 +34,17 @@ class StopTypeMigrationTest {
                 .contains("stop_type = 'CUSTOM' AND viaggio_id IS NULL AND attivita_id IS NULL");
     }
 
+    @Test
+    void scriptDiMigrazione_includonoIndiciSuiRiferimentiDelleTappe() {
+        String sql = leggiTutteLeMigrazioni();
+
+        assertThat(sql)
+                .contains("idx_itinerary_stops_viaggio_id")
+                .contains("ON itinerary_stops (viaggio_id)")
+                .contains("idx_itinerary_stops_attivita_id")
+                .contains("ON itinerary_stops (attivita_id)");
+    }
+
     private String leggiTutteLeMigrazioni() {
         try {
             Path cartella = Paths.get(getClass().getClassLoader()

@@ -10,7 +10,7 @@ import java.lang.annotation.*;
 @Constraint(validatedBy = DateRangeValidator.class)
 @Documented
 public @interface DateRange {
-    String message() default "Start date must be before end date";
+    String message() default "La data di fine non puo' essere precedente alla data di inizio";
     Class<?>[] groups() default {};
     Class<? extends Payload>[] payload() default {};
 

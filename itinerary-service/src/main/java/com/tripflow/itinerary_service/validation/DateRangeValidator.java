@@ -34,16 +34,25 @@ public class DateRangeValidator implements ConstraintValidator<DateRange, Object
             return true;
         }
 
+        boolean valid;
         if (startValue instanceof LocalDate start && endValue instanceof LocalDate end) {
-            return !start.isAfter(end);
+            valid = !start.isAfter(end);
+        } else if (startValue instanceof LocalDateTime start && endValue instanceof LocalDateTime end) {
+            valid = !start.isAfter(end);
+        } else {
+            // Tipo non gestito: non blocchiamo la validazione.
+            valid = true;
         }
 
-        if (startValue instanceof LocalDateTime start && endValue instanceof LocalDateTime end) {
-            return !start.isAfter(end);
+        if (!valid && context != null) {
+            // La violazione viene agganciata al campo di fine: il client riceve
+            // "endDate : <messaggio>" invece di un errore globale sull'oggetto.
+            context.disableDefaultConstraintViolation();
+            context.buildConstraintViolationWithTemplate(context.getDefaultConstraintMessageTemplate())
+                    .addPropertyNode(endField)
+                    .addConstraintViolation();
         }
-
-        // Tipo non gestito: non blocchiamo la validazione.
-        return true;
+        return valid;
     }
 
     // Legge il valore di un campo provando prima l'accessor dei record (nome del campo)

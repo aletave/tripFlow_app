@@ -76,7 +76,11 @@ class DateRangeValidatorTest {
 
         assertThat(violations)
                 .hasSize(1)
-                .allSatisfy(v -> assertThat(v.getMessage()).isEqualTo("Start date must be before end date"));
+                .allSatisfy(v -> {
+                    assertThat(v.getMessage()).isEqualTo("La data di fine non puo' essere precedente alla data di inizio");
+                    // la violazione e' agganciata al campo di fine, non all'oggetto
+                    assertThat(v.getPropertyPath().toString()).isEqualTo("endDate");
+                });
     }
 
     @Test

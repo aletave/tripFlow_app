@@ -121,6 +121,30 @@ class AuthControllerTest {
     }
 
     @Test
+    void register_telefonoE164_201() throws Exception {
+        when(authService.register(any())).thenReturn(new RegisterResponse(ID, "mario.rossi@example.com", true, true));
+
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(REGISTER_BODY.replace("\"dateOfBirth\": \"1990-01-01\"",
+                                "\"dateOfBirth\": \"1990-01-01\", \"phoneNumber\": \"+393331234567\"")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void register_telefonoSenzaPrefisso_400() throws Exception {
+        for (String telefono : new String[]{"3331234567", "+39 333 123 4567", "+39", "+0391234567"}) {
+            mockMvc.perform(post("/api/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(REGISTER_BODY.replace("\"dateOfBirth\": \"1990-01-01\"",
+                                    "\"dateOfBirth\": \"1990-01-01\", \"phoneNumber\": \"" + telefono + "\"")))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("phoneNumber")));
+        }
+        verify(authService, org.mockito.Mockito.never()).register(any());
+    }
+
+    @Test
     void register_emailDuplicata_409() throws Exception {
         when(authService.register(any())).thenThrow(new EmailAlreadyExistsException("mario.rossi@example.com"));
 
@@ -316,6 +340,19 @@ class AuthControllerTest {
                 .andExpect(status().isOk());
 
         verify(authService).updateProfile(eq("kc-123"), any());
+    }
+
+    @Test
+    void updateMe_telefonoNonInternazionale_400() throws Exception {
+        mockMvc.perform(put("/api/auth/me")
+                        .with(jwt().jwt(j -> j.subject("kc-123")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName": "Mario", "lastName": "Rossi", "phoneNumber": "333-1234567"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        verify(authService, org.mockito.Mockito.never()).updateProfile(any(), any());
     }
 
     @Test

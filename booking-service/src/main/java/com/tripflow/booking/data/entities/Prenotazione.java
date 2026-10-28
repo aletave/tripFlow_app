@@ -63,6 +63,9 @@ public class Prenotazione {
     @Column(name = "viaggio_prezzo_snap", nullable = false, precision = 10, scale = 2)
     private BigDecimal viaggioPrezzoSnap;
 
+    @Column(name = "viaggio_immagine_snap", length = 1000)
+    private String viaggioImmagineSnap;
+
 
     //dati prenotazione
     @Column(name = "numero_partecipanti", nullable = false)

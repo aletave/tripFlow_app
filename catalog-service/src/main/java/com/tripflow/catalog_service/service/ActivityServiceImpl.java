@@ -10,6 +10,7 @@ import com.tripflow.catalog_service.repository.TripRepository;
 import com.tripflow.catalog_service.repository.ActivitySpecification;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
@@ -38,7 +39,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .orElseThrow(() -> new ResourceNotFoundException("viaggio non trovato con id: " + requestDTO.getTripId()));
 
         if (!trip.getOrganizerId().equals(organizerId)) {
-            throw new RuntimeException("Non hai i permessi per aggiungere attività a questo viaggio");
+            throw new AccessDeniedException("Non hai i permessi per aggiungere attività a questo viaggio");
         }
 
         Activity activity = modelMapper.map(requestDTO, Activity.class);
@@ -66,7 +67,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .orElseThrow(() -> new ResourceNotFoundException("attività non trovata con id: " + id));
 
         if (!existingActivity.getTrip().getOrganizerId().equals(organizerId)) {
-            throw new RuntimeException("Non hai i permessi per modificare questa attività");
+            throw new AccessDeniedException("Non hai i permessi per modificare questa attività");
         }
 
         modelMapper.map(requestDTO, existingActivity);
@@ -83,7 +84,7 @@ public class ActivityServiceImpl implements ActivityService {
                 .orElseThrow(() -> new ResourceNotFoundException("Attività non trovata con id: " + id));
 
         if (!activity.getTrip().getOrganizerId().equals(organizerId)) {
-            throw new RuntimeException("Non hai i permessi per eliminare questa attività");
+            throw new AccessDeniedException("Non hai i permessi per eliminare questa attività");
         }
 
         activityRepository.delete(activity);
@@ -113,6 +114,3 @@ public class ActivityServiceImpl implements ActivityService {
                 .toList();
     }
 }
-
-
-

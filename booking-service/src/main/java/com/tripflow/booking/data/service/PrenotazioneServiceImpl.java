@@ -84,10 +84,14 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         int disponibili = viaggio.getAvailableSpots() - occupati;
 
         if (richiesti > disponibili) {
-            throw new BookingException(
-                    "Posti insufficienti per il viaggio " + request.getViaggioId() +
-                            ": disponibili " + disponibili +
-                            ", richiesti " + richiesti);
+            String messaggio;
+            if (disponibili <= 0) {
+                messaggio = "Il viaggio \"" + viaggio.getName() + "\" è al completo";
+            } else {
+                messaggio = "Posti insufficienti per \"" + viaggio.getName() + "\": ne restano " +
+                        disponibili + ", ne hai richiesti " + richiesti;
+            }
+            throw new BookingException(messaggio);
         }
 
 
@@ -98,15 +102,19 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         for (ActivityResponseDTO att : attivitaRichieste) {
             if (richiesti > att.getAvailableSpots()) {
                 throw new BookingException(
-                        "Posti insufficienti per l'attività " + att.getId() +
-                                ": disponibili " + att.getAvailableSpots() +
-                                ", richiesti " + richiesti);
+                        "Posti insufficienti per l'attività \"" + att.getName() + "\": ne restano " +
+                                att.getAvailableSpots() + ", ne hai richiesti " + richiesti);
             }
         }
 
         String nomeViaggiatore = viaggiatoreNome;
         if(nomeViaggiatore == null || nomeViaggiatore.isBlank()){
             nomeViaggiatore = "Viaggiatore";
+        }
+
+        String immagineViaggio = null;
+        if (viaggio.getImages() != null && !viaggio.getImages().isEmpty()) {
+            immagineViaggio = viaggio.getImages().get(0);
         }
 
         Prenotazione prenotazione = Prenotazione.builder()
@@ -118,6 +126,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                 .viaggioDataInizioSnap(viaggio.getStartDate())
                 .viaggioDataFineSnap(viaggio.getEndDate())
                 .viaggioPrezzoSnap(viaggio.getPrice())
+                .viaggioImmagineSnap(immagineViaggio)
                 .numeroPartecipanti(richiesti)
                 .stato(StatoPrenotazione.IN_ATTESA)
                 .dataPrenotazione(adesso)
@@ -273,9 +282,8 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
         if (prenotazione.getNumeroPartecipanti() > att.getAvailableSpots()) {
             throw new BookingException(
-                    "Posti insufficienti per l'attività " + att.getId() +
-                            ": disponibili " + att.getAvailableSpots() +
-                            ", richiesti " + prenotazione.getNumeroPartecipanti());
+                    "Posti insufficienti per l'attività \"" + att.getName() + "\": ne restano " +
+                            att.getAvailableSpots() + ", ne hai richiesti " + prenotazione.getNumeroPartecipanti());
         }
 
         PrenotazioneAttivita nuovaAttivita = PrenotazioneAttivita.builder()

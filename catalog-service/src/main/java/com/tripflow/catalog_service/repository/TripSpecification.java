@@ -2,6 +2,7 @@ package com.tripflow.catalog_service.repository;
 
 import com.tripflow.catalog_service.model.Trip;
 import org.springframework.data.jpa.domain.Specification;
+import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Predicate;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -38,11 +39,15 @@ public class TripSpecification {
             }
 
             if (minAvailableSpots != null) {
-                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("availableSpots"), minAvailableSpots));
+                // Posti liberi effettivi = availableSpots - coalesce(bookedSpots, 0)
+                Expression<Integer> bookedCoalesced = criteriaBuilder.coalesce(
+                        root.get("bookedSpots"), 0);
+                Expression<Integer> freeSpots = criteriaBuilder.diff(
+                        root.get("availableSpots"), bookedCoalesced);
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(freeSpots, minAvailableSpots));
             }
 
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
     }
 }
-

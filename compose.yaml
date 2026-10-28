@@ -205,6 +205,7 @@ services:
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/tripflow/protocol/openid-connect/certs
       USER_AUTH_SERVICE_URL: http://user-auth-service:8086
+      CATALOG_SERVICE_URL: http://catalog-service:8084
     depends_on:
       discovery-service:
         condition: service_healthy

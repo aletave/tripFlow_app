@@ -26,6 +26,7 @@ public class PrenotazioneResponse {
     //Snapshot del viaggio (Dati congelati)
     private String titoloViaggio;
     private String destinazione;
+    private String immagineViaggio;
     private LocalDate dataInizio;
     private LocalDate dataFine;
     private BigDecimal prezzoUnitarioAlMomentoDelBooking;

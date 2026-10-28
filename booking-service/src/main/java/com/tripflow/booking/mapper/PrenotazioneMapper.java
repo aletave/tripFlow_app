@@ -31,6 +31,7 @@ public final class PrenotazioneMapper {
                 .viaggioId(p.getViaggioId())
                 .titoloViaggio(p.getViaggioTitoloSnap())
                 .destinazione(p.getViaggioDestinazioneSnap())
+                .immagineViaggio(p.getViaggioImmagineSnap())
                 .dataInizio(p.getViaggioDataInizioSnap())
                 .dataFine(p.getViaggioDataFineSnap())
                 .prezzoUnitarioAlMomentoDelBooking(p.getViaggioPrezzoSnap())

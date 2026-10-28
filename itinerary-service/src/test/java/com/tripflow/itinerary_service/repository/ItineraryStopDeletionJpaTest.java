@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.repository;
 
+import com.tripflow.itinerary_service.client.CatalogClient;
 import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
 import com.tripflow.itinerary_service.dto.response.ItineraryResponse;
@@ -43,6 +44,8 @@ class ItineraryStopDeletionJpaTest {
 
     @MockBean
     private UserAuthClient userAuthClient;
+    @MockBean
+    private CatalogClient catalogClient;
 
     private final UUID ownerId = UUID.fromString("70cd15d7-3a55-407c-9909-1f575e86cbfe");
 

@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.service;
 
+import com.tripflow.itinerary_service.client.CatalogClient;
 import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
@@ -60,6 +61,8 @@ class ItineraryServiceTest {
     private ItineraryShareRepository itineraryShareRepository;
     @Mock
     private UserAuthClient userAuthClient;
+    @Mock
+    private CatalogClient catalogClient;
 
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(new PlatformTransactionManager() {
         @Override
@@ -91,6 +94,7 @@ class ItineraryServiceTest {
                 new ItineraryMapper(),
                 new ItineraryShareMapper(),
                 userAuthClient,
+                catalogClient,
                 transactionTemplate
         );
     }
@@ -830,5 +834,64 @@ class ItineraryServiceTest {
                 .hasMessage("Non puoi condividere un itinerario con te stesso");
         verify(userAuthClient, never()).userExists(any());
         verify(itineraryShareRepository, never()).save(any());
+    }
+
+    @Test
+    void addStop_viaggioInesistenteNelCatalogo_lanciaIllegalArgumentSenzaSalvare() {
+        UUID viaggioId = UUID.randomUUID();
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(datedItinerary()));
+        when(catalogClient.tripExists(viaggioId)).thenReturn(false);
+
+        assertThatThrownBy(() -> itineraryService.addStopToItinerary(1L,
+                stopRequest(1, "TRIP", viaggioId, null, inRangeStart, inRangeEnd), userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non trovato nel catalogo");
+        verify(itineraryStopRepository, never()).save(any());
+    }
+
+    @Test
+    void addStop_viaggioEsistente_vieneSalvata() {
+        UUID viaggioId = UUID.randomUUID();
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(datedItinerary()));
+        when(catalogClient.tripExists(viaggioId)).thenReturn(true);
+        when(itineraryStopRepository.save(any(ItineraryStop.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var response = itineraryService.addStopToItinerary(1L,
+                stopRequest(1, "TRIP", viaggioId, null, inRangeStart, inRangeEnd), userId);
+
+        assertThat(response.viaggioId()).isEqualTo(viaggioId);
+    }
+
+    @Test
+    void addStop_attivitaInesistenteNelCatalogo_lanciaIllegalArgument() {
+        UUID attivitaId = UUID.randomUUID();
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(datedItinerary()));
+        when(catalogClient.activityExists(attivitaId)).thenReturn(false);
+
+        assertThatThrownBy(() -> itineraryService.addStopToItinerary(1L,
+                stopRequest(1, "ACTIVITY", null, attivitaId, inRangeStart, inRangeEnd), userId))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("non trovata nel catalogo");
+    }
+
+    @Test
+    void addStop_estraneo_403PrimaDiInterrogareIlCatalogo() {
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary(1L, otherOwner, Visibility.PRIVATE)));
+
+        assertThatThrownBy(() -> itineraryService.addStopToItinerary(1L,
+                stopRequest(1, "TRIP", UUID.randomUUID(), null, inRangeStart, inRangeEnd), userId))
+                .isInstanceOf(AccessDeniedException.class);
+        verify(catalogClient, never()).tripExists(any());
+    }
+
+    @Test
+    void addStop_tappaCustom_nonInterrogaIlCatalogo() {
+        when(itineraryRepository.findById(1L)).thenReturn(Optional.of(datedItinerary()));
+        when(itineraryStopRepository.save(any(ItineraryStop.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        itineraryService.addStopToItinerary(1L, stopRequest(1, "CUSTOM", null, null, inRangeStart, inRangeEnd), userId);
+
+        verify(catalogClient, never()).tripExists(any());
+        verify(catalogClient, never()).activityExists(any());
     }
 }

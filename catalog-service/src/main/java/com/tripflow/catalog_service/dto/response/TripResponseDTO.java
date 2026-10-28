@@ -14,12 +14,15 @@ public class TripResponseDTO {
     private LocalDate startDate;
     private LocalDate endDate;
     private BigDecimal price;
+
+    /** Posti effettivamente liberi: totalSpots - bookedSpots. */
     private Integer availableSpots;
+
+    /** Capacità totale dichiarata dall'organizzatore. */
+    private Integer totalSpots;
+
     private UUID organizerId;
     private String description;
     private List<String> images;
     private List<ActivityResponseDTO> activities;
-    private Integer bookedSpots;
-
-
 }

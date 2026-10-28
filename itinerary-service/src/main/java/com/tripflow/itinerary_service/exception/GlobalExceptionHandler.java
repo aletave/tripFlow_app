@@ -32,6 +32,12 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.NOT_FOUND, req, safeMessage(ex.getMessage(), "Risorsa non trovata"), ex);
     }
 
+    @ExceptionHandler(CatalogServiceUnavailableException.class)
+    public ResponseEntity<ServiceError> onCatalogUnavailable(WebRequest req, CatalogServiceUnavailableException ex) {
+        return errorResponse(HttpStatus.SERVICE_UNAVAILABLE, req,
+                safeMessage(ex.getMessage(), "Catalogo non disponibile"), ex);
+    }
+
     @ExceptionHandler(UserAuthServiceUnavailableException.class)
     public ResponseEntity<ServiceError> onUserAuthUnavailable(WebRequest req, UserAuthServiceUnavailableException ex) {
         return errorResponse(HttpStatus.SERVICE_UNAVAILABLE, req,

@@ -1,5 +1,6 @@
 package com.tripflow.itinerary_service.service;
 
+import com.tripflow.itinerary_service.client.CatalogClient;
 import com.tripflow.itinerary_service.client.UserAuthClient;
 import com.tripflow.itinerary_service.dto.request.AddItineraryStopRequest;
 import com.tripflow.itinerary_service.dto.request.CreateItineraryRequest;
@@ -46,6 +47,7 @@ public class ItineraryService {
     private final ItineraryMapper itineraryMapper;
     private final ItineraryShareMapper itineraryShareMapper;
     private final UserAuthClient userAuthClient;
+    private final CatalogClient catalogClient;
     private final TransactionTemplate transactionTemplate;
 
     public ItineraryService(
@@ -55,6 +57,7 @@ public class ItineraryService {
             ItineraryMapper itineraryMapper,
             ItineraryShareMapper itineraryShareMapper,
             UserAuthClient userAuthClient,
+            CatalogClient catalogClient,
             TransactionTemplate transactionTemplate
     ) {
         this.itineraryRepository = itineraryRepository;
@@ -63,6 +66,7 @@ public class ItineraryService {
         this.itineraryMapper = itineraryMapper;
         this.itineraryShareMapper = itineraryShareMapper;
         this.userAuthClient = userAuthClient;
+        this.catalogClient = catalogClient;
         this.transactionTemplate = transactionTemplate;
     }
 
@@ -133,8 +137,18 @@ public class ItineraryService {
         return List.copyOf(accessible.values());
     }
 
-    @Transactional
+    // Non @Transactional, come shareItinerary: la verifica su catalog-service e' una chiamata
+    // HTTP e non deve tenere aperta una transazione (e una connessione HikariCP).
+    // 1) permessi in una transazione breve, 2) verifica remota dei riferimenti,
+    // 3) salvataggio in una transazione separata.
     public ItineraryStopResponse addStopToItinerary(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
+        transactionTemplate.executeWithoutResult(status -> findItineraryWithWriteAccess(itineraryId, userId));
+        validateStopReferences(request.stopType(), request.viaggioId(), request.attivitaId());
+        verifyCatalogReferences(request.viaggioId(), request.attivitaId());
+        return transactionTemplate.execute(status -> persistNewStop(itineraryId, request, userId));
+    }
+
+    private ItineraryStopResponse persistNewStop(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
         validateStopReferences(request.stopType(), request.viaggioId(), request.attivitaId());
         validateStopWithinItinerary(itinerary, request.startDatetime(), request.endDatetime());
@@ -150,8 +164,15 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(savedStop);
     }
 
-    @Transactional
+    // Stesso schema di addStopToItinerary: se la richiesta porta nuovi riferimenti al
+    // catalogo, li verifica fuori dalla transazione prima di applicare la modifica.
     public ItineraryStopResponse updateStop(Long itineraryId, Long stopId, UpdateItineraryStopRequest request, UUID userId) {
+        transactionTemplate.executeWithoutResult(status -> findItineraryWithWriteAccess(itineraryId, userId));
+        verifyCatalogReferences(request.viaggioId(), request.attivitaId());
+        return transactionTemplate.execute(status -> applyStopUpdate(itineraryId, stopId, request, userId));
+    }
+
+    private ItineraryStopResponse applyStopUpdate(Long itineraryId, Long stopId, UpdateItineraryStopRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
 
         ItineraryStop stop = itineraryStopRepository.findById(stopId)
@@ -389,6 +410,17 @@ public class ItineraryService {
                 .filter(java.util.Objects::nonNull)
                 .max(Integer::compare)
                 .orElse(0) + 1;
+    }
+
+    // Viaggi e attivita' referenziati devono esistere nel catalogo:
+    // id inesistente -> 400, catalog-service non raggiungibile -> 503.
+    private void verifyCatalogReferences(UUID viaggioId, UUID attivitaId) {
+        if (viaggioId != null && !catalogClient.tripExists(viaggioId)) {
+            throw new IllegalArgumentException("Viaggio " + viaggioId + " non trovato nel catalogo");
+        }
+        if (attivitaId != null && !catalogClient.activityExists(attivitaId)) {
+            throw new IllegalArgumentException("Attivita' " + attivitaId + " non trovata nel catalogo");
+        }
     }
 
     // Anticipa il vincolo unique_itinerary_stop_order con un messaggio esplicito (409).

@@ -1,6 +1,8 @@
 package com.tripflow.catalog_service.mapper;
 
+import com.tripflow.catalog_service.dto.response.ActivityResponseDTO;
 import com.tripflow.catalog_service.dto.response.TripResponseDTO;
+import com.tripflow.catalog_service.model.Activity;
 import com.tripflow.catalog_service.model.Trip;
 import org.modelmapper.Converter;
 import org.modelmapper.ModelMapper;
@@ -31,6 +33,21 @@ public class ModelMapperConfig {
 
         modelMapper.createTypeMap(Trip.class, TripResponseDTO.class)
                 .setPostConverter(tripConverter);
+
+        Converter<Activity, ActivityResponseDTO> activityConverter = ctx -> {
+            Activity src = ctx.getSource();
+            ActivityResponseDTO dst = ctx.getDestination();
+
+            int booked = src.getBookedSpots() != null ? src.getBookedSpots() : 0;
+
+            dst.setAvailableSpots(src.getAvailableSpots() - booked);
+            dst.setTotalSpots(src.getAvailableSpots());
+
+            return dst;
+        };
+
+        modelMapper.createTypeMap(Activity.class, ActivityResponseDTO.class)
+                .setPostConverter(activityConverter);
 
         return modelMapper;
     }

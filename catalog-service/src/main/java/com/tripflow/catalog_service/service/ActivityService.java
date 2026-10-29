@@ -20,4 +20,8 @@ public interface ActivityService {
 
     List<ActivityResponseDTO> searchActivities(String name, String description, Integer duration,
                                                BigDecimal minPrice, BigDecimal maxPrice, Integer minAvailableSpots);
+
+    void addBookedSpots(List<UUID> activityIds, int spots);
+
+    void releaseBookedSpots(List<UUID> activityIds, int spots);
 }

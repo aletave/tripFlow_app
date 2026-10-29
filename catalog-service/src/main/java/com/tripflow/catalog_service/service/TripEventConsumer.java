@@ -10,9 +10,11 @@ import org.springframework.stereotype.Service;
 public class TripEventConsumer {
 
     private final TripService tripService;
+    private final ActivityService activityService;
 
-    public TripEventConsumer(TripService tripService) {
+    public TripEventConsumer(TripService tripService, ActivityService activityService) {
         this.tripService = tripService;
+        this.activityService = activityService;
     }
 
     @RabbitListener(queues = RabbitmqConfig.CATALOG_BOOKING_QUEUE)
@@ -24,8 +26,10 @@ public class TripEventConsumer {
         try {
             if ("BOOKING_CONFIRMED".equals(event.getEventType())) {
                 tripService.decreaseAvailableSpots(payload.getTripId(), payload.getSpots());
+                activityService.addBookedSpots(payload.getActivityIds(), payload.getSpots());
             } else if ("BOOKING_CANCELLED".equals(event.getEventType())) {
                 tripService.increaseAvailableSpots(payload.getTripId(), payload.getSpots());
+                activityService.releaseBookedSpots(payload.getActivityIds(), payload.getSpots());
             }
         } catch (Exception e) {
             System.err.println("[RABBITMQ SAGA ERROR] Errore nell'aggiornamento dei posti: " + e.getMessage());

@@ -14,5 +14,6 @@ public class ActivityResponseDTO {
     private Integer duration;
     private BigDecimal price;
     private Integer availableSpots;
+    private Integer totalSpots;
     private UUID tripId;
 }

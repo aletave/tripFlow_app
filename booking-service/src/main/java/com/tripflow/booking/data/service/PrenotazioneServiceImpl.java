@@ -516,7 +516,13 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
     private void verificaPostiAttivita(ActivityResponseDTO att, int richiesti, LocalDateTime adesso) {
         int occupati = attivitaRepository.sommaPostiOccupati(att.getId(), adesso);
-        int disponibili = att.getAvailableSpots() - occupati;
+        int capacita;
+        if (att.getTotalSpots() != null) {
+            capacita = att.getTotalSpots();
+        } else {
+            capacita = att.getAvailableSpots();
+        }
+        int disponibili = capacita - occupati;
         if (richiesti > disponibili){
             String messaggio;
             if (disponibili <= 0) {

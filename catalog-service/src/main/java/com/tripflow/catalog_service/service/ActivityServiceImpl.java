@@ -123,4 +123,32 @@ public class ActivityServiceImpl implements ActivityService {
                 .map(activity -> modelMapper.map(activity, ActivityResponseDTO.class))
                 .toList();
     }
+
+    @Override
+    @Transactional
+    public void addBookedSpots(List<UUID> activityIds, int spots) {
+        if (activityIds == null || activityIds.isEmpty()) {
+            return;
+        }
+        List<Activity> activities = activityRepository.findAllById(activityIds);
+        for (Activity activity : activities) {
+            int currentBooked = activity.getBookedSpots() != null ? activity.getBookedSpots() : 0;
+            activity.setBookedSpots(currentBooked + spots);
+        }
+        activityRepository.saveAll(activities);
+    }
+
+    @Override
+    @Transactional
+    public void releaseBookedSpots(List<UUID> activityIds, int spots) {
+        if (activityIds == null || activityIds.isEmpty()) {
+            return;
+        }
+        List<Activity> activities = activityRepository.findAllById(activityIds);
+        for (Activity activity : activities) {
+            int currentBooked = activity.getBookedSpots() != null ? activity.getBookedSpots() : 0;
+            activity.setBookedSpots(Math.max(0, currentBooked - spots));
+        }
+        activityRepository.saveAll(activities);
+    }
 }

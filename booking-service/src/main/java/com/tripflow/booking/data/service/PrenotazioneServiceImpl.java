@@ -81,7 +81,13 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
         int occupati = prenotazioneRepository.sommaPostiOccupati(
                 request.getViaggioId(), adesso);
         int richiesti = request.getNumeroPartecipanti();
-        int disponibili = viaggio.getAvailableSpots() - occupati;
+        int capacita;
+        if (viaggio.getTotalSpots() != null) {
+            capacita = viaggio.getTotalSpots();
+        } else {
+            capacita = viaggio.getAvailableSpots();
+        }
+        int disponibili = capacita - occupati;
 
         if (richiesti > disponibili) {
             String messaggio;
@@ -100,11 +106,7 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
 
         //check disponibilità posti per ogni attività richiest
         for (ActivityResponseDTO att : attivitaRichieste) {
-            if (richiesti > att.getAvailableSpots()) {
-                throw new BookingException(
-                        "Posti insufficienti per l'attività \"" + att.getName() + "\": ne restano " +
-                                att.getAvailableSpots() + ", ne hai richiesti " + richiesti);
-            }
+            verificaPostiAttivita(att, richiesti, adesso);
         }
 
         String nomeViaggiatore = viaggiatoreNome;
@@ -280,11 +282,8 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                             prenotazione.getViaggioId());
         }
 
-        if (prenotazione.getNumeroPartecipanti() > att.getAvailableSpots()) {
-            throw new BookingException(
-                    "Posti insufficienti per l'attività \"" + att.getName() + "\": ne restano " +
-                            att.getAvailableSpots() + ", ne hai richiesti " + prenotazione.getNumeroPartecipanti());
-        }
+        prenotazioneRepository.bloccaViaggio(prenotazione.getViaggioId().toString());
+        verificaPostiAttivita(att, prenotazione.getNumeroPartecipanti(), LocalDateTime.now());
 
         PrenotazioneAttivita nuovaAttivita = PrenotazioneAttivita.builder()
                 .attivitaId(att.getId())
@@ -512,6 +511,21 @@ public class PrenotazioneServiceImpl implements PrenotazioneService {
                     attivitaId, e);
             throw new ServizioNonDisponibileException(
                     "Impossibile recuperare l'attività: catalog-service non disponibile");
+        }
+    }
+
+    private void verificaPostiAttivita(ActivityResponseDTO att, int richiesti, LocalDateTime adesso) {
+        int occupati = attivitaRepository.sommaPostiOccupati(att.getId(), adesso);
+        int disponibili = att.getAvailableSpots() - occupati;
+        if (richiesti > disponibili){
+            String messaggio;
+            if (disponibili <= 0) {
+                messaggio = "L'attività \"" + att.getName() + "\" è al completo";
+            } else {
+                messaggio = "Posti insufficienti per l'attività \"" + att.getName() + "\": ne restano " +
+                        disponibili + ", ne hai richiesti " + richiesti;
+            }
+            throw new BookingException(messaggio);
         }
     }
 

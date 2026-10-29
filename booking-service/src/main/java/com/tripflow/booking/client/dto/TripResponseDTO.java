@@ -17,6 +17,7 @@ public class TripResponseDTO {
     private LocalDate endDate;
     private BigDecimal price;
     private Integer availableSpots;
+    private Integer totalSpots;
     private UUID organizerId;
     private String description;
     private List<String> images;

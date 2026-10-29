@@ -3,6 +3,7 @@ package com.tripflow.catalog_service.service;
 import com.tripflow.catalog_service.dto.request.TripRequestDTO;
 import com.tripflow.catalog_service.dto.response.TripResponseDTO;
 import com.tripflow.catalog_service.exception.ResourceNotFoundException;
+import com.tripflow.catalog_service.mapper.TripMapper;
 import com.tripflow.catalog_service.model.Trip;
 import com.tripflow.catalog_service.repository.TripRepository;
 import com.tripflow.catalog_service.repository.TripSpecification;
@@ -19,12 +20,14 @@ import java.util.UUID;
 @Service
 public class TripServiceImpl implements TripService {
     private final ModelMapper modelMapper;
+    private final TripMapper tripMapper;
     private final TripRepository tripRepository;
     private final TripEventProducer tripEventProducer;
 
-    public TripServiceImpl(ModelMapper modelMapper, TripRepository tripRepository,
-            TripEventProducer tripEventProducer) {
+    public TripServiceImpl(ModelMapper modelMapper, TripMapper tripMapper,
+            TripRepository tripRepository, TripEventProducer tripEventProducer) {
         this.modelMapper = modelMapper;
+        this.tripMapper = tripMapper;
         this.tripRepository = tripRepository;
         this.tripEventProducer = tripEventProducer;
     }
@@ -33,13 +36,11 @@ public class TripServiceImpl implements TripService {
     @Transactional
     public TripResponseDTO createTrip(TripRequestDTO requestDTO, UUID organizerId) {
         Trip trip = modelMapper.map(requestDTO, Trip.class);
-
         trip.setOrganizerId(organizerId);
 
         Trip savedTrip = tripRepository.save(trip);
 
-        TripResponseDTO responseDTO = modelMapper.map(savedTrip, TripResponseDTO.class);
-
+        TripResponseDTO responseDTO = tripMapper.toDTO(savedTrip);
         tripEventProducer.sendTripCreatedEvent(responseDTO);
 
         return responseDTO;
@@ -51,7 +52,7 @@ public class TripServiceImpl implements TripService {
         Trip trip = tripRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("viaggio non trovato con id: " + id));
 
-        return modelMapper.map(trip, TripResponseDTO.class);
+        return tripMapper.toDTO(trip);
     }
 
     @Override
@@ -68,8 +69,7 @@ public class TripServiceImpl implements TripService {
 
         Trip updatedTrip = tripRepository.save(existingTrip);
 
-        TripResponseDTO responseDTO = modelMapper.map(updatedTrip, TripResponseDTO.class);
-
+        TripResponseDTO responseDTO = tripMapper.toDTO(updatedTrip);
         tripEventProducer.sendTripUpdatedEvent(responseDTO);
 
         return responseDTO;
@@ -86,26 +86,24 @@ public class TripServiceImpl implements TripService {
         }
 
         tripRepository.delete(trip);
-
-        tripEventProducer.sendTripDeletedEvent(modelMapper.map(trip, TripResponseDTO.class));
-
+        tripEventProducer.sendTripDeletedEvent(tripMapper.toDTO(trip));
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TripResponseDTO> getTripsByOrganizer(UUID organizerId) {
-        List<Trip> trips = tripRepository.findByOrganizerId(organizerId);
-
-        return trips.stream().map(trip -> modelMapper.map(trip, TripResponseDTO.class))
+        return tripRepository.findByOrganizerId(organizerId)
+                .stream()
+                .map(tripMapper::toDTO)
                 .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TripResponseDTO> getAllTrips() {
-        List<Trip> trips = tripRepository.findAll();
-
-        return trips.stream().map(trip -> modelMapper.map(trip, TripResponseDTO.class))
+        return tripRepository.findAll()
+                .stream()
+                .map(tripMapper::toDTO)
                 .toList();
     }
 
@@ -117,10 +115,9 @@ public class TripServiceImpl implements TripService {
         Specification<Trip> spec = TripSpecification.getFilterSpecification(
                 destination, startDate, endDate, minPrice, maxPrice, minAvailableSpots);
 
-        List<Trip> trips = tripRepository.findAll(spec);
-
-        return trips.stream()
-                .map(trip -> modelMapper.map(trip, TripResponseDTO.class))
+        return tripRepository.findAll(spec)
+                .stream()
+                .map(tripMapper::toDTO)
                 .toList();
     }
 
@@ -131,7 +128,6 @@ public class TripServiceImpl implements TripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Viaggio non trovato con id " + tripId));
 
         int currentBooked = trip.getBookedSpots() != null ? trip.getBookedSpots() : 0;
-
         trip.setBookedSpots(currentBooked + spots);
         tripRepository.save(trip);
 
@@ -146,7 +142,6 @@ public class TripServiceImpl implements TripService {
                 .orElseThrow(() -> new ResourceNotFoundException("Viaggio non trovato con id " + tripId));
 
         int currentBooked = trip.getBookedSpots() != null ? trip.getBookedSpots() : 0;
-
         trip.setBookedSpots(Math.max(0, currentBooked - spots));
         tripRepository.save(trip);
 

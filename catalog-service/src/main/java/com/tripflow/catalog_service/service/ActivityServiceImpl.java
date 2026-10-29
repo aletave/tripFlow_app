@@ -2,6 +2,7 @@ package com.tripflow.catalog_service.service;
 
 import com.tripflow.catalog_service.dto.request.ActivityRequestDTO;
 import com.tripflow.catalog_service.dto.response.ActivityResponseDTO;
+import com.tripflow.catalog_service.exception.InvalidActivitySpotsException;
 import com.tripflow.catalog_service.exception.ResourceNotFoundException;
 import com.tripflow.catalog_service.model.Activity;
 import com.tripflow.catalog_service.model.Trip;
@@ -27,9 +28,9 @@ public class ActivityServiceImpl implements ActivityService {
     public ActivityServiceImpl(ActivityRepository activityRepository,
                                TripRepository tripRepository,
                                ModelMapper modelMapper) {
-        this.modelMapper=modelMapper;
-        this.activityRepository=activityRepository;
-        this.tripRepository=tripRepository;
+        this.modelMapper = modelMapper;
+        this.activityRepository = activityRepository;
+        this.tripRepository = tripRepository;
     }
 
     @Override
@@ -42,8 +43,17 @@ public class ActivityServiceImpl implements ActivityService {
             throw new AccessDeniedException("Non hai i permessi per aggiungere attività a questo viaggio");
         }
 
-        Activity activity = modelMapper.map(requestDTO, Activity.class);
+        // I posti liberi netti del viaggio = availableSpots - bookedSpots
+        int booked = trip.getBookedSpots() != null ? trip.getBookedSpots() : 0;
+        int freeSpots = trip.getAvailableSpots() - booked;
 
+        if (requestDTO.getAvailableSpots() > freeSpots) {
+            throw new InvalidActivitySpotsException(
+                    "Il numero di posti dell'attività (" + requestDTO.getAvailableSpots() +
+                    ") non può superare i posti liberi del viaggio (" + freeSpots + ")");
+        }
+
+        Activity activity = modelMapper.map(requestDTO, Activity.class);
         activity.setTrip(trip);
 
         Activity savedActivity = activityRepository.save(activity);

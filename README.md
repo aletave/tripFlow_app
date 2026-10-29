@@ -1,23 +1,24 @@
-#  TripFlow — Microservices Travel Platform
+#  TripFlow — Piattaforma di Viaggi a Microservizi
 
 **TripFlow** è una piattaforma cloud-native a **microservizi** progettata per la gestione completa dell'ecosistema dei viaggi organizzati e della pianificazione di itinerari turistici. 
 
 Sviluppata con **Java 17**, **Spring Boot 3.5**, **Spring Cloud** e containerizzata con **Docker**, TripFlow adotta un'architettura distribuita **Event-Driven** basata su **RabbitMQ**, con autenticazione federata tramite **Keycloak (OAuth2 / OIDC)** e database relazionali isolati **PostgreSQL** (Database-per-Service Pattern).
+
+Il frontend è un'app Android nativa, nel repository **[TripFlow-Android](https://github.com/francescomolinaroo/TripFlow-Android)**.
 
 ---
 
 ## Indice
 
 1. [Panoramica Funzionale](#-panoramica-funzionale)
-2. [Architettura del Sistema](#-architettura-del-sistema)
-3. [Mappa dei Microservizi e Porte](#-mappa-dei-microservizi-e-porte)
-4. [Flussi Asincroni ed Event-Driven (RabbitMQ)](#-flussi-asincroni-ed-event-driven-rabbitmq)
-5. [Dettaglio dei Microservizi](#-dettaglio-dei-microservizi)
-6. [Sicurezza e Autenticazione (Keycloak)](#-sicurezza-e-autenticazione-keycloak)
-7. [Prerequisiti e Avvio Rapido](#-prerequisiti-e-avvio-rapido)
-8. [Pagamenti con Stripe (modalità test)](#-pagamenti-con-stripe-modalità-test)
-9. [Provare l'App Android](#-provare-lapp-android)
-10. [Documentazione API (Swagger / OpenAPI)](#-documentazione-api-swagger--openapi)
+2. [Mappa dei Microservizi e Porte](#-mappa-dei-microservizi-e-porte)
+3. [Flussi Asincroni ed Event-Driven (RabbitMQ)](#-flussi-asincroni-ed-event-driven-rabbitmq)
+4. [Dettaglio dei Microservizi](#-dettaglio-dei-microservizi)
+5. [Sicurezza e Autenticazione (Keycloak)](#-sicurezza-e-autenticazione-keycloak)
+6. [Prerequisiti e Avvio Rapido](#-prerequisiti-e-avvio-rapido)
+7. [Pagamenti con Stripe (modalità test)](#-pagamenti-con-stripe-modalità-test)
+8. [Provare l'App Android](#-provare-lapp-android)
+9. [Documentazione API (Swagger / OpenAPI)](#-documentazione-api-swagger--openapi)
 
 ---
 
@@ -36,56 +37,6 @@ La piattaforma modella le interazioni tra due ruoli primari:
     *   Effettua **prenotazioni** con blocco temporaneo dei posti (politica di TTL contro l'overbooking).
     *   Paga in sicurezza tramite **Stripe PaymentIntent** con conferma asincrona tramite webhook, anche con il **codice sconto di compleanno** (`BDAY15`, -15%).
     *   Rilascia **recensioni verificate** (solo per viaggi prenotati e completati).
-
----
-
-##  Architettura del Sistema
-
-```mermaid
-graph TD
-    Client[Client / Web / Mobile App] -->|Porta 8080| GW[API Gateway Service]
-
-    subgraph "Edge & Discovery"
-        GW -->|Service Discovery| Eureka[Discovery Service - Eureka :8761]
-        AuthKC[Keycloak IAM :9090]
-        Mailpit[Mailpit SMTP :1025 / UI :8025]
-    end
-
-    subgraph "Microservizi di Dominio"
-        GW -->|/user-auth-service/**| Auth[User Auth Service :8086]
-        GW -->|/catalog-service/**| Catalog[Catalog Service :8084]
-        GW -->|/booking-service/**| Booking[Booking Service :8083]
-        GW -->|/itinerary-service/**| Itinerary[Itinerary Service :8087]
-        GW -->|/review-service/**| Review[Review Service :8085]
-    end
-
-    subgraph "Event Bus & Storage"
-        RabbitMQ[(RabbitMQ :5672)]
-        PG[(PostgreSQL 16 :5433)]
-        PG_KC[(PostgreSQL Keycloak :5434)]
-    end
-
-    Auth -.->|OAuth2 / Admin API| AuthKC
-    Auth -.->|Email OTP e compleanno| Mailpit
-    Auth -->|Publish User Events| RabbitMQ
-    Catalog <-->|Publish Trips / Consume Bookings| RabbitMQ
-    Booking <-->|Publish Bookings / Consume Trips| RabbitMQ
-    Booking -->|Feign Client| Catalog
-    Booking -->|Feign Client (Coupon compleanno)| Auth
-    Booking -.->|Payment Intents & Webhooks| Stripe[Stripe API]
-    Itinerary -->|Consume Trip Events| RabbitMQ
-    Itinerary -->|REST Client| Auth
-    Itinerary -->|REST Client| Catalog
-    Review -->|Feign Client (Verifica Prenotazione)| Booking
-    Review -->|Feign Client| Catalog
-
-    Auth --> PG
-    Catalog --> PG
-    Booking --> PG
-    Itinerary --> PG
-    Review --> PG
-    AuthKC --> PG_KC
-```
 
 ---
 
@@ -152,17 +103,17 @@ sequenceDiagram
 
 ##  Dettaglio dei Microservizi
 
-### 1. `gateway-service`
+### 1. `gateway-service` (Tutti gli autori)
 *   Reverse Proxy asincrono non bloccante basato su **Spring Cloud Gateway (WebFlux)**.
 *   Configurazione CORS centralizzata (`globalcors`).
 *   Inoltro dinamico delle richieste tramite Eureka (`lb://<service-name>`).
 *   Swagger UI unificato che aggrega le OpenAPI specs di tutti i microservizi.
 
-### 2. `discovery-service`
+### 2. `discovery-service` (Francesco Molinaro)
 *   Server di Service Discovery **Spring Cloud Netflix Eureka**.
 *   Heartbeat periodici per monitoraggio dell'health status delle istanze.
 
-### 3. `user-auth-service`
+### 3. `user-auth-service` (Alessandro Taverniti e relativa parte frontend user-auth)
 *   Gestione credenziali e profili utente in combinazione con **Keycloak**.
 *   **Verifica email con OTP**: alla registrazione l'utente riceve via mail un codice a 6 cifre; il login resta bloccato (403) finché l'email non è verificata.
 *   **Reset password con OTP**: `forgot-password` invia un codice via mail, `reset-password` lo valida e imposta la nuova password.
@@ -182,7 +133,7 @@ sequenceDiagram
     *   `GET /api/auth/me/birthday-coupon`: Verifica se l'utente può usare il codice di compleanno (usato da `booking-service`).
     *   `POST /api/auth/users/lookup-by-ids`: Lookup utenti inter-servizio per Keycloak ID.
 
-### 4. `catalog-service`
+### 4. `catalog-service` (Umberto Messina e relativa parte frontend catalog)
 *   Gestione dell'offerta turistica.
 *   **Modelli**:
     *   `Trip`: Destinazione, intervallo date, quota base, posti massimi, posti prenotati, elenco immagini in formato JSONB, organizzatore di riferimento.
@@ -196,7 +147,7 @@ sequenceDiagram
     *   `POST /api/v1/activities`, `PUT /api/v1/activities/{id}`, `DELETE /api/v1/activities/{id}`: Gestione attività.
     *   `GET /api/v1/activities/{id}`, `GET /api/v1/activities/trip/{tripId}`, `GET /api/v1/activities/search`: Consultazione attività.
 
-### 5. `booking-service`
+### 5. `booking-service` (Francesco Molinaro e relativa parte frontend booking)
 *   Gestione del flusso d'acquisto, emissione ordini e integrazione monetaria.
 *   **Caratteristiche distintive**:
     *   **Ciclo di vita**: `IN_ATTESA` → `CONFERMATA` (pagamento riuscito) → `COMPLETATA` (job notturno alle 3:00, dopo la data di fine del viaggio). In alternativa `ANNULLATA`.
@@ -215,7 +166,7 @@ sequenceDiagram
     *   `GET /api/pagamenti/{prenotazioneId}`: Stato del pagamento.
     *   `POST /api/pagamenti/webhook`: Webhook listener per notifica di successo/fallimento da Stripe.
 
-### 6. `itinerary-service`
+### 6. `itinerary-service` (Mattia Taccone e relativa parte frontend itinerary)
 *   Creazione e condivisione di road-trip, piani di viaggio e itinerari giornalieri.
 *   **Modelli**:
     *   `Itinerary`: Titolo, descrizione, date e visibilità (`PRIVATE`, `PUBLIC`, `SHARED`).
@@ -228,7 +179,7 @@ sequenceDiagram
     *   `POST /api/itineraries/{id}/shares`, `GET /api/itineraries/{id}/shares`, `DELETE /api/itineraries/{id}/shares/{sharedWithUserId}`: Condivisione con un altro utente, identificato dal suo codice utente (Keycloak ID) e validato su `user-auth-service`.
     *   `GET /api/itineraries/public/{token}`: Lettura pubblica di un itinerario reso pubblico.
 
-### 7. `review-service`
+### 7. `review-service` (Francesco Molinaro e relativa parte frontend review)
 *   Feedback e reputazione.
 *   **Regole di business**:
     *   Per lasciare una recensione a un viaggio, il servizio effettua una chiamata Feign a **Booking Service** per verificare che l'utente sia il titolare di una prenotazione in stato `COMPLETATA`.
@@ -372,7 +323,7 @@ Il codice `BDAY15` va creato nel proprio account Stripe: in **Catalogo prodotti 
 
 ##  Provare l'App Android
 
-L'app Android (repository `TripFlow-Android`) punta a `http://10.0.2.2:8080/`, l'indirizzo con cui l'emulatore Android raggiunge il Gateway sul computer. Va quindi provata su **emulatore**, con il backend avviato come descritto sopra.
+L'app Android (repository [TripFlow-Android](https://github.com/francescomolinaroo/TripFlow-Android)) punta a `http://10.0.2.2:8080/`, l'indirizzo con cui l'emulatore Android raggiunge il Gateway sul computer. Va quindi provata su **emulatore**, con il backend avviato come descritto sopra.
 
 *   **Registrazione**: il codice di verifica a 6 cifre arriva su Mailpit (`http://localhost:8025`). Lo stesso vale per il recupero password.
 *   **Ruoli**: in registrazione si sceglie "Viaggio" (`TRAVELER`) oppure "Organizzo" (`ORGANIZER`). L'organizzatore crea viaggi e attività e vede le prenotazioni ricevute; il viaggiatore prenota, paga, crea itinerari e scrive recensioni.
@@ -398,4 +349,5 @@ Dal menu a tendina in alto a destra si scelgono le specifiche OpenAPI dei singol
 
 ##  Autori & Licenza
 Sviluppato come progetto per l'Università della Calabria (UNICAL).
+Autori del progetto: Francesco Molinaro, Mattia Taccone, Umberto Messina, Alessandro Taverniti.
 Distribuito con licenza accademica / open-source.

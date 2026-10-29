@@ -13,19 +13,24 @@ import com.tripflow.itinerary_service.dto.response.ItineraryStopResponse;
 import com.tripflow.itinerary_service.dto.response.PublicItineraryResponse;
 import com.tripflow.itinerary_service.service.ItineraryService;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
-// Controller REST che espone gli endpoint HTTP per itinerari e tappe.
-// Livelli di autorizzazione:
-// - GET /{id}: owner o utente con condivisione (read) o PUBLIC
-// - POST /{id}/stops, PUT /{id}/stops/{stopId}: owner o utente con condivisione e can_edit=true
-// - DELETE /{id}/stops/{stopId}: owner o utente con condivisione e can_edit=true
-// - PATCH /{id}/visibility: solo owner
-// - PUT /{id}: owner o utente con condivisione e can_edit=true
-// - DELETE /{id}, shares management: solo owner
-// - GET /public/{token}: accesso pubblico (solo PUBLIC visibility)
+/**
+ * Endpoint REST di itinerari, tappe e condivisioni ({@code /api/itineraries}).
+ *
+ * <p>L'utente e' sempre ricavato dal JWT tramite {@link SecurityUtils#ownerId()}.
+ * I controlli di accesso sono nel service:
+ * <ul>
+ *   <li>lettura: proprietario, utente con condivisione o itinerario {@code PUBLIC};</li>
+ *   <li>tappe e modifica dati: proprietario o condivisione con {@code canEdit};</li>
+ *   <li>visibilita', condivisioni, eliminazione: solo il proprietario;</li>
+ *   <li>{@code GET /public/{token}}: senza autenticazione.</li>
+ * </ul>
+ */
 @RestController
 @RequestMapping("/api/itineraries")
 public class ItineraryController {
@@ -36,36 +41,36 @@ public class ItineraryController {
         this.itineraryService = itineraryService;
     }
 
+    /** Crea un itinerario dell'utente corrente (201). */
     @PostMapping
-    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.CREATED)
     public ItineraryResponse createItinerary(
             @Valid @RequestBody CreateItineraryRequest request
     ) {
         return itineraryService.createItinerary(request, SecurityUtils.ownerId());
     }
 
+    /** Itinerari propri e condivisi con l'utente: e' la lista mostrata nell'app. */
     @GetMapping
     public List<ItineraryResponse> getAllItineraries() {
         return itineraryService.getAllAccessibleItineraries(SecurityUtils.ownerId());
     }
 
+    /** Dettaglio di un itinerario con le sue tappe (403 se non accessibile). */
     @GetMapping("/{id}")
     public ItineraryResponse getItineraryById(@PathVariable Long id) {
         return itineraryService.getItineraryById(id, SecurityUtils.ownerId());
     }
 
+    /** Vista pubblica di un itinerario {@code PUBLIC}, senza autenticazione. */
     @GetMapping("/public/{token}")
-    public PublicItineraryResponse getPublicItinerary(@PathVariable java.util.UUID token) {
+    public PublicItineraryResponse getPublicItinerary(@PathVariable UUID token) {
         return itineraryService.getPublicItinerary(token);
     }
 
-    @GetMapping("/mie")
-    public List<ItineraryResponse> getItinerariesByOwner() {
-        return itineraryService.getItinerariesByOwner(SecurityUtils.ownerId());
-    }
-
+    /** Aggiunge una tappa (201). Viaggi e attivita' vengono verificati sul catalogo. */
     @PostMapping("/{id}/stops")
-    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.CREATED)
     public ItineraryStopResponse addStopToItinerary(
             @PathVariable Long id,
             @Valid @RequestBody AddItineraryStopRequest request
@@ -73,6 +78,7 @@ public class ItineraryController {
         return itineraryService.addStopToItinerary(id, request, SecurityUtils.ownerId());
     }
 
+    /** Modifica una tappa: vengono aggiornati solo i campi presenti nel body. */
     @PutMapping("/{id}/stops/{stopId}")
     public ItineraryStopResponse updateStop(
             @PathVariable Long id,
@@ -82,6 +88,7 @@ public class ItineraryController {
         return itineraryService.updateStop(id, stopId, request, SecurityUtils.ownerId());
     }
 
+    /** Elimina una tappa. */
     @DeleteMapping("/{id}/stops/{stopId}")
     public void deleteStop(
             @PathVariable Long id,
@@ -90,6 +97,7 @@ public class ItineraryController {
         itineraryService.deleteStop(id, stopId, SecurityUtils.ownerId());
     }
 
+    /** Cambia la visibilita' (PRIVATE, SHARED, PUBLIC). Solo il proprietario. */
     @PatchMapping("/{id}/visibility")
     public ItineraryResponse updateVisibility(
             @PathVariable Long id,
@@ -98,6 +106,7 @@ public class ItineraryController {
         return itineraryService.updateVisibility(id, request, SecurityUtils.ownerId());
     }
 
+    /** Aggiorna titolo, descrizione e date dell'itinerario. */
     @PutMapping("/{id}")
     public ItineraryResponse updateItinerary(
             @PathVariable Long id,
@@ -106,13 +115,15 @@ public class ItineraryController {
         return itineraryService.updateItinerary(id, request, SecurityUtils.ownerId());
     }
 
+    /** Elimina l'itinerario con tutte le tappe. Solo il proprietario. */
     @DeleteMapping("/{id}")
     public void deleteItinerary(@PathVariable Long id) {
         itineraryService.deleteItinerary(id, SecurityUtils.ownerId());
     }
 
+    /** Condivide l'itinerario con un utente (201). Solo il proprietario. */
     @PostMapping("/{id}/shares")
-    @org.springframework.web.bind.annotation.ResponseStatus(org.springframework.http.HttpStatus.CREATED)
+    @ResponseStatus(HttpStatus.CREATED)
     public ItineraryShareResponse shareItinerary(
             @PathVariable Long id,
             @Valid @RequestBody ShareItineraryRequest request
@@ -120,14 +131,16 @@ public class ItineraryController {
         return itineraryService.shareItinerary(id, request, SecurityUtils.ownerId());
     }
 
+    /** Revoca la condivisione con un utente. Solo il proprietario. */
     @DeleteMapping("/{id}/shares/{sharedWithUserId}")
     public void removeShare(
             @PathVariable Long id,
-            @PathVariable java.util.UUID sharedWithUserId
+            @PathVariable UUID sharedWithUserId
     ) {
         itineraryService.removeShare(id, sharedWithUserId, SecurityUtils.ownerId());
     }
 
+    /** Elenca le condivisioni dell'itinerario. Solo il proprietario. */
     @GetMapping("/{id}/shares")
     public List<ItineraryShareResponse> getShares(@PathVariable Long id) {
         return itineraryService.getShares(id, SecurityUtils.ownerId());

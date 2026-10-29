@@ -9,6 +9,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Accesso agli itinerari. Le query caricano anche le tappe in un'unica lettura
+ * ({@code @EntityGraph}), evitando una query per ogni itinerario.
+ */
 public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
 
     @Override
@@ -19,21 +23,11 @@ public interface ItineraryRepository extends JpaRepository<Itinerary, Long> {
     @EntityGraph(attributePaths = "stops")
     List<Itinerary> findAllById(Iterable<Long> ids);
 
-    // tutti gli itinerari di un owner
+    /** Itinerari di cui l'utente e' proprietario. */
     @EntityGraph(attributePaths = "stops")
     List<Itinerary> findByOwnerId(UUID ownerId);
 
+    /** Itinerario con quel token, solo se ha ancora la visibilita' indicata. */
     @EntityGraph(attributePaths = "stops")
     Optional<Itinerary> findByPublicTokenAndVisibility(UUID publicToken, Visibility visibility);
-
-    // recupera un itinerario specifico dell'owner
-    @EntityGraph(attributePaths = "stops")
-    Optional<Itinerary> findByIdAndOwnerId(Long id, UUID ownerId);
-
-    // verifica esistenza dell'itinerario per owner
-    boolean existsByIdAndOwnerId(Long id, UUID ownerId);
-
-    // opzionale: filtra per visibilità
-    @EntityGraph(attributePaths = "stops")
-    List<Itinerary> findByVisibility(Visibility visibility);
 }

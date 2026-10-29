@@ -6,6 +6,10 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Modifica parziale di una tappa: i campi {@code null} restano invariati.
+ * Se cambia {@code stopType}, i riferimenti al catalogo vengono sostituiti.
+ */
 @DateRange(startField = "startDatetime", endField = "endDatetime")
 public record UpdateItineraryStopRequest(
 

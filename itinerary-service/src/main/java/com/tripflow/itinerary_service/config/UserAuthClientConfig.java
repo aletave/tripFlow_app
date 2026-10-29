@@ -7,12 +7,19 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-// RestClient dedicato a user-auth-service.
-// I timeout di connect/read evitano che un rallentamento dell'auth-service
-// saturi il thread pool di Tomcat e, indirettamente, il pool HikariCP.
+/**
+ * Configura il {@link RestClient} usato per chiamare user-auth-service.
+ *
+ * <p>URL e timeout si impostano da {@code application.properties}
+ * ({@code tripflow.user-auth-service.*}). I timeout evitano che un auth-service lento
+ * saturi i thread di Tomcat e, di conseguenza, le connessioni al database.
+ */
 @Configuration
 public class UserAuthClientConfig {
 
+    /**
+     * RestClient con URL base, timeout e inoltro del token dell'utente.
+     */
     @Bean
     public RestClient userAuthRestClient(
             RestClient.Builder builder,

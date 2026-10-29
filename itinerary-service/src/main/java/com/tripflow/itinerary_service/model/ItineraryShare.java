@@ -5,8 +5,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
+/**
+ * Condivisione di un itinerario con un utente (tabella {@code itinerary_shares}).
+ * Una sola condivisione per coppia itinerario-utente.
+ */
 @Getter
 @Setter
 @Entity
@@ -32,9 +37,10 @@ public class ItineraryShare {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /** Imposta la data di creazione in UTC. */
     @PrePersist
     public void prePersist() {
         // Timestamp in UTC, coerente con Itinerary.createdAt.
-        createdAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        createdAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 }

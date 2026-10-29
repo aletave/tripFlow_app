@@ -26,7 +26,7 @@ class ItineraryMapperTest {
     @Test
     void toEntity_mappaCampiEVisibilita() {
         CreateItineraryRequest request = new CreateItineraryRequest(
-                "Vacanza", "descrizione", Visibility.PUBLIC, true,
+                "Vacanza", "descrizione", Visibility.PUBLIC,
                 LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 3));
 
         Itinerary entity = mapper.toEntity(request, OWNER_ID, Visibility.PUBLIC);
@@ -61,7 +61,7 @@ class ItineraryMapperTest {
         stop.setItinerary(itinerary);
         itinerary.getStops().add(stop);
 
-        ItineraryResponse response = mapper.toResponse(itinerary);
+        ItineraryResponse response = mapper.toResponse(itinerary, false);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.ownerId()).isEqualTo(OWNER_ID);

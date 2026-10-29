@@ -6,6 +6,9 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/**
+ * Nuovi titolo, descrizione e date dell'itinerario (sostituiscono i precedenti).
+ */
 @DateRange(startField = "startDate", endField = "endDate")
 public record UpdateItineraryRequest(
 

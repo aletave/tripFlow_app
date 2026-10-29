@@ -7,7 +7,12 @@ import java.util.UUID;
 
 import java.time.LocalDateTime;
 
-//si occuperà lombok per fare getter e setter in maniera automatico.
+/**
+ * Tappa di un itinerario (tabella {@code itinerary_stops}).
+ *
+ * <p>Puo' riferirsi a un viaggio del catalogo ({@code TRIP}, con {@code viaggioId}),
+ * a un'attivita' ({@code ACTIVITY}, con {@code attivitaId}) o essere libera ({@code CUSTOM}).
+ */
 @Getter
 @Setter
 @Entity
@@ -45,11 +50,10 @@ public class ItineraryStop {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
-    //costruttore vuoto
     public ItineraryStop() {
     }
 
-    //gestisce la relazione tra itinerary stop (1) -> itineary(n)
+    // Itinerario a cui appartiene la tappa.
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "itinerary_id", nullable = false)
     private Itinerary itinerary;

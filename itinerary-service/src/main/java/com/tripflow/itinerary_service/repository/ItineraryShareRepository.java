@@ -10,6 +10,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Accesso alle condivisioni degli itinerari.
+ */
 public interface ItineraryShareRepository extends JpaRepository<ItineraryShare, Long> {
 
     Optional<ItineraryShare> findByItineraryIdAndSharedWithUserId(Long itineraryId, UUID sharedWithUserId);
@@ -22,6 +25,7 @@ public interface ItineraryShareRepository extends JpaRepository<ItineraryShare, 
 
     boolean existsByItineraryIdAndSharedWithUserId(Long itineraryId, UUID sharedWithUserId);
 
+    /** Elimina tutte le condivisioni di un itinerario (quando torna PRIVATE). */
     @Modifying
     @Query("delete from ItineraryShare s where s.itineraryId = :itineraryId")
     void deleteByItineraryId(@Param("itineraryId") Long itineraryId);

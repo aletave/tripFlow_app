@@ -20,8 +20,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-//Security del itinerary-service con Keycloak come Resource Server:
-//la validazione dei JWT avviene via JWKS, i ruoli si leggono da realm_access.roles.
+/**
+ * Sicurezza del servizio: Resource Server OAuth2 con token JWT emessi da Keycloak.
+ *
+ * <p>Tutti gli endpoint richiedono un JWT valido, tranne {@code /api/itineraries/public/**}
+ * e, solo se abilitato da configurazione, Swagger. Sessione stateless, nessun login form.
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -35,6 +39,11 @@ public class SecurityConfig {
             "/webjars/**"
     };
 
+    /**
+     * Regole di accesso agli endpoint e validazione del JWT.
+     *
+     * @param swaggerPublic se {@code true} Swagger e' accessibile senza token
+     */
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
@@ -47,7 +56,7 @@ public class SecurityConfig {
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
-                    // Public itinerary access (no auth required)
+                    // Itinerario pubblico tramite token: nessuna autenticazione.
                     auth.requestMatchers("/api/itineraries/public/**").permitAll();
 
                     // Swagger/OpenAPI pubblico solo se esplicitamente abilitato
@@ -65,10 +74,12 @@ public class SecurityConfig {
         return http.build();
     }
 
-    //CORS globale con origini esplicite configurabili.
-    //Non viene usato il wildcard "*": l'API e' bearer-based, quindi di default
-    //allowCredentials resta false. Se un client frontend richiede cookie/TLS
-    //client certificate, abilitarlo esplicitamente via CORS_ALLOW_CREDENTIALS.
+    /**
+     * CORS con origini esplicite, configurabili da {@code tripflow.cors.allowed-origins}.
+     *
+     * <p>Niente wildcard {@code "*"}. L'API usa token Bearer, quindi {@code allowCredentials}
+     * resta {@code false} salvo diversa configurazione ({@code CORS_ALLOW_CREDENTIALS}).
+     */
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${tripflow.cors.allowed-origins:http://localhost:3000,http://localhost:4200,http://localhost:8080}") String allowedOrigins,
@@ -94,8 +105,10 @@ public class SecurityConfig {
                 .toList();
     }
 
-    //I ruoli arrivano nel claim annidato realm_access.roles:
-    //il converter di default non legge oggetti annidati, quindi serve questo custom.
+    /**
+     * Converte i ruoli Keycloak ({@code realm_access.roles}) in authority Spring
+     * con prefisso {@code ROLE_}. Il converter standard non legge claim annidati.
+     */
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();

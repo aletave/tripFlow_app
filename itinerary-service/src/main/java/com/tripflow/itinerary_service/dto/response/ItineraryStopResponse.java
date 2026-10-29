@@ -3,7 +3,9 @@ package com.tripflow.itinerary_service.dto.response;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-//restituirà un oggetto con all'interno i seguenti dati
+/**
+ * Una tappa dell'itinerario. Le date sono nell'ora locale indicata dall'utente.
+ */
 public record ItineraryStopResponse(
 
         Long id,

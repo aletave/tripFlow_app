@@ -6,7 +6,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
-//restituirà un oggetto con all'interno i seguenti dati
+/**
+ * Itinerario completo con tappe, come lo riceve l'app.
+ *
+ * <p>{@code publicToken} e' valorizzato solo se l'itinerario e' {@code PUBLIC};
+ * {@code canEdit} dice se l'utente corrente puo' modificarlo. I timestamp sono in UTC.
+ */
 public record ItineraryResponse(
 
         Long id,

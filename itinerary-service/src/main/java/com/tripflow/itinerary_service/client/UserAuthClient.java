@@ -9,11 +9,14 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.UUID;
 
-// Client inter-servizio verso user-auth-service.
-// Serve a verificare che un utente esista davvero prima di condividere un itinerario.
-// Il RestClient arriva da UserAuthClientConfig, dove sono configurati i timeout
-// espliciti di connect/read: un auth-service lento non puo' tenere bloccata
-// indefinitamente la richiesta.
+/**
+ * Client verso user-auth-service: verifica che un utente esista prima di condividere
+ * un itinerario con lui.
+ *
+ * <p>Il {@link RestClient} arriva da
+ * {@link com.tripflow.itinerary_service.config.UserAuthClientConfig}, con timeout espliciti:
+ * un auth-service lento non puo' bloccare la richiesta all'infinito.
+ */
 @Component
 public class UserAuthClient {
 
@@ -23,9 +26,11 @@ public class UserAuthClient {
         this.restClient = restClient;
     }
 
-    // Ritorna true se lo user-auth-service riconosce l'utente (200),
-    // false se non esiste (404). Timeout, errori di rete e 5xx vengono
-    // propagati come UserAuthServiceUnavailableException (503).
+    /**
+     * @param keycloakId id Keycloak dell'utente (il {@code sub} del suo token)
+     * @return {@code true} se l'utente esiste, {@code false} se user-auth-service risponde 404
+     * @throws UserAuthServiceUnavailableException timeout, errore di rete o 5xx (503)
+     */
     public boolean userExists(UUID keycloakId) {
         try {
             restClient.get()

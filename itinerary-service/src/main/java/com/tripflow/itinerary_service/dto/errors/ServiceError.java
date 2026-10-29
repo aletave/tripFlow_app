@@ -6,6 +6,10 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
+/**
+ * Corpo JSON di ogni risposta di errore del servizio
+ * (timestamp, codice HTTP, descrizione, messaggio, percorso).
+ */
 @Data
 @AllArgsConstructor
 @NoArgsConstructor

@@ -18,10 +18,15 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
+/**
+ * Conversioni tra entity JPA e DTO di itinerari e tappe.
+ */
 @Component
 public class ItineraryMapper {
 
-    //Converte un DTO di richiesta (CreateItineraryRequest)in una Entity Itinerary pronta per il db
+    /**
+     * Crea l'entity di un nuovo itinerario. La visibilita' arriva gia' risolta dal service.
+     */
     public Itinerary toEntity(CreateItineraryRequest request, UUID ownerId, Visibility visibility) {
 
         Itinerary itinerary = new Itinerary();
@@ -37,7 +42,9 @@ public class ItineraryMapper {
         return itinerary;
     }
 
-    //Converte il DTO AddItineraryStopRequest in una Entity ItineraryStop.
+    /**
+     * Crea l'entity di una nuova tappa collegata all'itinerario.
+     */
 
     public ItineraryStop toStopEntity(
             AddItineraryStopRequest request,
@@ -68,11 +75,11 @@ public class ItineraryMapper {
         return stop;
     }
 
-    //Converte una Entity Itinerary in un DTO Response da restituire al frontend.
-    public ItineraryResponse toResponse(Itinerary itinerary) {
-        return toResponse(itinerary, false);
-    }
-
+    /**
+     * Converte un itinerario nella risposta per l'app.
+     *
+     * @param canEdit se l'utente corrente puo' modificarlo (calcolato dal service)
+     */
     public ItineraryResponse toResponse(Itinerary itinerary, boolean canEdit) {
 
         List<ItineraryStopResponse> stops =
@@ -97,7 +104,9 @@ public class ItineraryMapper {
         );
     }
 
-    // Vista ridotta per il link pubblico: nessun dato sull'owner o sui permessi.
+    /**
+     * Vista ridotta per l'accesso pubblico: nessun dato sul proprietario o sui permessi.
+     */
     public PublicItineraryResponse toPublicResponse(Itinerary itinerary) {
         return new PublicItineraryResponse(
                 itinerary.getId(),
@@ -109,14 +118,17 @@ public class ItineraryMapper {
         );
     }
 
-    // I timestamp tecnici (createdAt/updatedAt) sono salvati in UTC come LocalDateTime:
-    // in uscita si esplicita l'offset (es. "2026-10-27T11:15:00Z") cosi' il client
-    // puo' convertirli correttamente nell'ora italiana senza ambiguita'.
+    /**
+     * Aggiunge l'offset UTC a un timestamp salvato in UTC (es. {@code 2026-10-27T11:15:00Z}),
+     * cosi' il client lo converte senza ambiguita' nell'ora locale.
+     */
     public static OffsetDateTime toUtc(LocalDateTime utcDateTime) {
         return utcDateTime != null ? utcDateTime.atOffset(ZoneOffset.UTC) : null;
     }
 
-    //Converte una singola Entity ItineraryStop in un DTO ItineraryStopResponse.
+    /**
+     * Converte una tappa nella risposta per l'app.
+     */
     public ItineraryStopResponse toStopResponse(ItineraryStop stop) {
 
         return new ItineraryStopResponse(
@@ -133,6 +145,9 @@ public class ItineraryMapper {
         );
     }
 
+    /**
+     * Sostituisce titolo, descrizione e date dell'itinerario.
+     */
     public void updateEntity(UpdateItineraryRequest request, Itinerary itinerary) {
         itinerary.setTitle(request.title());
         itinerary.setDescription(request.description());
@@ -140,6 +155,10 @@ public class ItineraryMapper {
         itinerary.setEndDate(request.endDate());
     }
 
+    /**
+     * Applica una modifica parziale alla tappa: i campi {@code null} restano invariati.
+     * Se cambia il tipo, i riferimenti al catalogo vengono sostituiti da quelli della richiesta.
+     */
     public void updateStopEntity(UpdateItineraryStopRequest request, ItineraryStop stop) {
         if (request.stopOrder() != null) {
             stop.setStopOrder(request.stopOrder());

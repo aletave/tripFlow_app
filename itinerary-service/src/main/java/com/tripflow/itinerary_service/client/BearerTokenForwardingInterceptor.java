@@ -11,12 +11,20 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.io.IOException;
 
-// Propaga in avanti l'header Authorization della richiesta HTTP in ingresso.
-// user-auth-service richiede un JWT valido per il lookup utente, quindi la
-// chiamata inter-servizio deve viaggiare con le credenziali del chiamante.
+/**
+ * Inoltra alle chiamate verso altri servizi l'header {@code Authorization} della richiesta
+ * in ingresso.
+ *
+ * <p>catalog-service e user-auth-service richiedono un JWT valido: la chiamata
+ * inter-servizio viaggia quindi con le credenziali dell'utente che l'ha originata.
+ */
 @Component
 public class BearerTokenForwardingInterceptor implements ClientHttpRequestInterceptor {
 
+    /**
+     * Copia il token della richiesta corrente, se presente. Fuori da una richiesta HTTP
+     * (es. listener RabbitMQ) la chiamata parte senza token.
+     */
     @Override
     public ClientHttpResponse intercept(
             HttpRequest request,

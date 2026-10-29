@@ -8,6 +8,12 @@ import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
+/**
+ * Dati per creare un itinerario. Le date non possono essere nel passato e la fine
+ * non puo' precedere l'inizio.
+ *
+ * <p>Se {@code visibility} manca l'itinerario e' {@code PRIVATE}.
+ */
 @DateRange(startField = "startDate", endField = "endDate")
 public record CreateItineraryRequest(
 
@@ -18,8 +24,6 @@ public record CreateItineraryRequest(
         String description,
 
         Visibility visibility,
-
-        Boolean isPublic,
 
         @FutureOrPresent(message = "La data di inizio dell'itinerario non puo' essere nel passato")
         LocalDate startDate,

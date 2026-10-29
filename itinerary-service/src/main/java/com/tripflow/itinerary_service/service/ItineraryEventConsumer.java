@@ -18,6 +18,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
+/**
+ * Ascolta gli eventi del catalogo su RabbitMQ e tiene allineate le tappe.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -25,11 +28,14 @@ public class ItineraryEventConsumer {
 
     private final ItineraryStopRepository itineraryStopRepository;
 
-    // Quando il catalogo elimina un viaggio vengono rimosse:
-    // - le tappe TRIP che referenziano il viaggio (viaggio_id);
-    // - le tappe ACTIVITY che referenziano le attivita' del viaggio, eliminate a
-    //   cascata nel catalogo. Il payload TRIP_DELETED e' un TripResponseDTO che
-    //   contiene anche la lista "activities" con i rispettivi id.
+    /**
+     * Gestisce {@code TRIP_DELETED}: elimina le tappe che puntano al viaggio cancellato
+     * e quelle che puntano alle sue attivita' (cancellate insieme al viaggio).
+     *
+     * <p>Il payload e' il viaggio del catalogo, con la lista {@code activities} e i loro id.
+     * Eventi di altro tipo o senza id valido vengono ignorati. In caso di errore il messaggio
+     * viene ritentato (vedi {@code spring.rabbitmq.listener.simple.retry}).
+     */
     @RabbitListener(bindings = @QueueBinding(
             value = @Queue(value = RabbitmqConfig.ITINERARY_TRIP_QUEUE, durable = "true"),
             exchange = @Exchange(value = RabbitmqConfig.TRIP_EXCHANGE, type = "topic"),

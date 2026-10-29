@@ -17,12 +17,23 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-//Global Exception Handler per il itinerary-service.
-//Ogni errore restituisce lo stesso contratto JSON (ServiceError):
-//timestamp, status, error, message, path.
+/**
+ * Traduce le eccezioni in risposte HTTP con lo stesso formato JSON ({@link ServiceError}).
+ *
+ * <p>Mappa principale:
+ * <ul>
+ *   <li>{@code IllegalArgumentException}, validazione, JSON illeggibile: 400;</li>
+ *   <li>{@link UnauthorizedActionException}: 401; {@code AccessDeniedException}: 403;</li>
+ *   <li>{@link ResourceNotFoundException}, URL inesistente: 404;</li>
+ *   <li>{@code IllegalStateException}, vincoli del DB: 409 (o 400 per i dati non validi);</li>
+ *   <li>catalog-service o user-auth-service non disponibili: 503;</li>
+ *   <li>qualsiasi altro errore: 500 con messaggio generico, dettaglio solo nei log.</li>
+ * </ul>
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
@@ -65,7 +76,7 @@ public class GlobalExceptionHandler {
     // - UNIQUE / altri vincoli: conflitto con dati esistenti -> 409
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ServiceError> onDataIntegrityViolation(WebRequest req, DataIntegrityViolationException ex) {
-        String detail = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase(java.util.Locale.ROOT);
+        String detail = String.valueOf(ex.getMostSpecificCause().getMessage()).toLowerCase(Locale.ROOT);
         if (detail.contains("chk_stop_type")) {
             return errorResponse(HttpStatus.BAD_REQUEST, req,
                     "stopType non valido. Valori ammessi: TRIP, ACTIVITY, CUSTOM (maiuscolo)", ex);

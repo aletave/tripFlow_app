@@ -7,11 +7,19 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
-// RestClient dedicato a catalog-service, con timeout espliciti come per user-auth-service:
-// un catalogo lento non deve bloccare i thread di questo servizio.
+/**
+ * Configura il {@link RestClient} usato per chiamare catalog-service.
+ *
+ * <p>URL e timeout si impostano da {@code application.properties}
+ * ({@code tripflow.catalog-service.*}): un catalogo lento non deve bloccare i thread
+ * di questo servizio.
+ */
 @Configuration
 public class CatalogClientConfig {
 
+    /**
+     * RestClient con URL base, timeout e inoltro del token dell'utente.
+     */
     @Bean
     public RestClient catalogRestClient(
             RestClient.Builder builder,

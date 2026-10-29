@@ -3,6 +3,9 @@ package com.tripflow.itinerary_service.dto.response;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+/**
+ * Condivisione salvata: con chi e con quali permessi. {@code createdAt} e' in UTC.
+ */
 public record ItineraryShareResponse(
         Long id,
         Long itineraryId,

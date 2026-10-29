@@ -44,7 +44,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -146,26 +145,13 @@ class ItineraryServiceTest {
         assertThat(result.get(0).id()).isEqualTo(1L);
     }
 
-    @Test
-    void createItinerary_isPublicTrue_creaConVisibilitaPubblica() {
-        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        CreateItineraryRequest request = new CreateItineraryRequest(
-                "Solo booleano", "descrizione", null, true, null, null);
-
-        ItineraryResponse response = itineraryService.createItinerary(request, userId);
-
-        assertThat(response.visibility()).isEqualTo(Visibility.PUBLIC);
-        assertThat(response.ownerId()).isEqualTo(userId);
-        assertThat(response.publicToken()).isNotNull();
-    }
 
     @Test
     void createItinerary_visibilityPublic_generaPublicToken() {
         when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateItineraryRequest request = new CreateItineraryRequest(
-                "Pubblico esplicito", "descrizione", Visibility.PUBLIC, null, null, null);
+                "Pubblico esplicito", "descrizione", Visibility.PUBLIC, null, null);
 
         ItineraryResponse response = itineraryService.createItinerary(request, userId);
 
@@ -174,11 +160,11 @@ class ItineraryServiceTest {
     }
 
     @Test
-    void createItinerary_enumHaPrioritaSulBooleano() {
+    void createItinerary_visibilitaShared_creaCondiviso() {
         when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateItineraryRequest request = new CreateItineraryRequest(
-                "Enum esplicito", "descrizione", Visibility.SHARED, true, null, null);
+                "Enum esplicito", "descrizione", Visibility.SHARED, null, null);
 
         ItineraryResponse response = itineraryService.createItinerary(request, userId);
 
@@ -190,7 +176,7 @@ class ItineraryServiceTest {
         when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> inv.getArgument(0));
 
         CreateItineraryRequest request = new CreateItineraryRequest(
-                "Senza visibilita'", null, null, null, null, null);
+                "Senza visibilita'", null, null, null, null);
 
         ItineraryResponse response = itineraryService.createItinerary(request, userId);
 
@@ -198,13 +184,13 @@ class ItineraryServiceTest {
     }
 
     @Test
-    void updateVisibility_daIsPublic_rendePubblico() {
+    void updateVisibility_public_generaToken() {
         Itinerary itinerary = itinerary(1L, userId, Visibility.PRIVATE);
         when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
         when(itineraryRepository.save(itinerary)).thenReturn(itinerary);
 
         ItineraryResponse response = itineraryService.updateVisibility(
-                1L, new UpdateVisibilityRequest(null, true), userId);
+                1L, new UpdateVisibilityRequest(Visibility.PUBLIC), userId);
 
         assertThat(response.visibility()).isEqualTo(Visibility.PUBLIC);
         assertThat(response.publicToken()).isNotNull();
@@ -213,13 +199,13 @@ class ItineraryServiceTest {
     }
 
     @Test
-    void updateVisibility_enumHaPrioritaSulBooleano() {
+    void updateVisibility_shared_rimuoveToken() {
         Itinerary itinerary = itinerary(1L, userId, Visibility.PRIVATE);
         when(itineraryRepository.findById(1L)).thenReturn(Optional.of(itinerary));
         when(itineraryRepository.save(itinerary)).thenReturn(itinerary);
 
         ItineraryResponse response = itineraryService.updateVisibility(
-                1L, new UpdateVisibilityRequest(Visibility.SHARED, false), userId);
+                1L, new UpdateVisibilityRequest(Visibility.SHARED), userId);
 
         assertThat(response.visibility()).isEqualTo(Visibility.SHARED);
         assertThat(response.publicToken()).isNull();
@@ -228,9 +214,9 @@ class ItineraryServiceTest {
     @Test
     void updateVisibility_senzaVisibilita_lanciaIllegalArgument() {
         assertThatThrownBy(() -> itineraryService.updateVisibility(
-                1L, new UpdateVisibilityRequest(null, null), userId))
+                1L, new UpdateVisibilityRequest(null), userId))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Almeno uno tra visibility e isPublic deve essere specificato");
+                .hasMessage("La visibilita' e' obbligatoria");
 
         verify(itineraryRepository, never()).findById(any());
         verify(itineraryRepository, never()).save(any(Itinerary.class));
@@ -247,7 +233,7 @@ class ItineraryServiceTest {
         when(itineraryRepository.save(itinerary)).thenReturn(itinerary);
 
         ItineraryResponse response = itineraryService.updateVisibility(
-                1L, new UpdateVisibilityRequest(Visibility.PRIVATE, null), userId);
+                1L, new UpdateVisibilityRequest(Visibility.PRIVATE), userId);
 
         assertThat(response.visibility()).isEqualTo(Visibility.PRIVATE);
         assertThat(response.publicToken()).isNull();
@@ -262,7 +248,7 @@ class ItineraryServiceTest {
         when(itineraryRepository.save(itinerary)).thenReturn(itinerary);
 
         ItineraryResponse response = itineraryService.updateVisibility(
-                1L, new UpdateVisibilityRequest(Visibility.PRIVATE, null), userId);
+                1L, new UpdateVisibilityRequest(Visibility.PRIVATE), userId);
 
         assertThat(response.visibility()).isEqualTo(Visibility.PRIVATE);
         verify(itineraryShareRepository).deleteByItineraryId(1L);
@@ -512,27 +498,12 @@ class ItineraryServiceTest {
         when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ItineraryResponse response = itineraryService.createItinerary(
-                new CreateItineraryRequest("Privato", null, Visibility.PRIVATE, null, null, null), userId);
+                new CreateItineraryRequest("Privato", null, Visibility.PRIVATE, null, null), userId);
 
         assertThat(response.publicToken()).isNull();
         assertThat(response.canEdit()).isTrue();
     }
 
-    @Test
-    void createItinerary_isPublicTrue_generaPublicTokenGiaSalvato() {
-        when(itineraryRepository.save(any(Itinerary.class))).thenAnswer(inv -> {
-            Itinerary toSave = inv.getArgument(0);
-            // il token deve essere gia' valorizzato al momento del salvataggio
-            assertThat(toSave.getPublicToken()).isNotNull();
-            return toSave;
-        });
-
-        ItineraryResponse response = itineraryService.createItinerary(
-                new CreateItineraryRequest("Pubblico", null, null, true, null, null), userId);
-
-        assertThat(response.visibility()).isEqualTo(Visibility.PUBLIC);
-        assertThat(response.publicToken()).isNotNull();
-    }
 
     @Test
     void getAllAccessibleItineraries_canEditCalcolatoDalleShareSenzaQueryAggiuntive() {
@@ -554,15 +525,6 @@ class ItineraryServiceTest {
         verify(itineraryShareRepository, never()).findByItineraryIdAndSharedWithUserId(any(), any());
     }
 
-    @Test
-    void getItinerariesByOwner_canEditSempreTrue() {
-        when(itineraryRepository.findByOwnerId(userId)).thenReturn(List.of(itinerary(1L, userId, Visibility.PUBLIC)));
-
-        assertThat(itineraryService.getItinerariesByOwner(userId))
-                .singleElement()
-                .extracting(ItineraryResponse::canEdit)
-                .isEqualTo(true);
-    }
 
     @Test
     void getPublicItinerary_nonEsponeDatiDellOwner() {

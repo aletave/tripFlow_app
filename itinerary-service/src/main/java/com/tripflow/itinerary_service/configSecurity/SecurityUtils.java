@@ -7,14 +7,22 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 import java.util.UUID;
 
-//Helper per estrarre l'identita' dell'utente dal token JWT nel SecurityContextHolder.
-//Il controller lo usa al posto dei parametri client: l'owner e' sempre il subject del token.
+/**
+ * Accesso all'identita' dell'utente autenticato.
+ *
+ * <p>Il controller ricava l'utente sempre dal token, mai da parametri inviati dal client:
+ * cosi' nessuno puo' agire a nome di un altro.
+ */
 public final class SecurityUtils {
 
     private SecurityUtils() {
     }
 
-    //Estrae UUID.fromString(jwt.getSubject()) dall'Authentication corrente.
+    /**
+     * Restituisce l'id dell'utente corrente, cioe' il claim {@code sub} del JWT.
+     *
+     * @throws UnauthorizedActionException se manca l'autenticazione o {@code sub} non e' un UUID (401)
+     */
     public static UUID ownerId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !(auth instanceof JwtAuthenticationToken jwtAuth)) {

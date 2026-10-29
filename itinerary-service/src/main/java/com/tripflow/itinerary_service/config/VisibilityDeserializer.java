@@ -9,13 +9,18 @@ import com.tripflow.itinerary_service.model.Visibility;
 import java.io.IOException;
 import java.util.Locale;
 
-// Deserializzatore tollerante per il campo "visibility".
-// Accetta indifferentemente:
-//  - il booleano di comodo ("visibility": true/false)
-//  - l'enum come stringa ("PUBLIC"/"PRIVATE"/"SHARED", anche in minuscolo)
-//  - le stringhe "true"/"false"
-// In questo modo i client Android che inviano la visibilita' in formati diversi
-// non ricevono piu' un 400.
+/**
+ * Lettura tollerante del campo JSON {@code visibility}.
+ *
+ * <p>Accetta:
+ * <ul>
+ *   <li>l'enum come stringa: {@code "PUBLIC"}, {@code "PRIVATE"}, {@code "SHARED"}
+ *       (anche in minuscolo);</li>
+ *   <li>un booleano o le stringhe {@code "true"}/{@code "false"}
+ *       ({@code true} = PUBLIC, {@code false} = PRIVATE).</li>
+ * </ul>
+ * Qualsiasi altro valore produce un 400.
+ */
 public class VisibilityDeserializer extends JsonDeserializer<Visibility> {
 
     @Override

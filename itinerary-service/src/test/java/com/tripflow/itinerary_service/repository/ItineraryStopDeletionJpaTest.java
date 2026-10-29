@@ -115,7 +115,7 @@ class ItineraryStopDeletionJpaTest {
     @Test
     void createItinerary_public_persisteIlPublicTokenNelDatabase() {
         ItineraryResponse response = itineraryService.createItinerary(
-                new CreateItineraryRequest("Pubblico", null, Visibility.PUBLIC, null, null, null), ownerId);
+                new CreateItineraryRequest("Pubblico", null, Visibility.PUBLIC, null, null), ownerId);
         entityManager.flush();
         entityManager.clear();
 
@@ -148,7 +148,7 @@ class ItineraryStopDeletionJpaTest {
         assertThat(itineraryStopRepository.deleteByAttivitaIdIn(java.util.Set.of(attivitaId))).isEqualTo(1);
         entityManager.clear();
 
-        assertThat(itineraryStopRepository.findByItineraryIdOrderByStopOrderAsc(itinerary.getId()))
+        assertThat(itineraryRepository.findById(itinerary.getId()).orElseThrow().getStops())
                 .extracting(ItineraryStop::getId)
                 .containsExactly(custom.getId());
     }

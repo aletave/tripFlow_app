@@ -27,17 +27,31 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
-// Service che contiene la logica applicativa relativa agli itinerari e alle tappe.
-// Livelli di autorizzazione:
-// 1. READ: owner, shared user (via itinerary_shares), or PUBLIC visibility
-// 2. WRITE (stops/update): owner or shared user with can_edit = true
-// 3. MANAGE/DELETE: only owner
+/**
+ * Logica applicativa di itinerari, tappe e condivisioni.
+ *
+ * <p>Livelli di accesso applicati da ogni metodo:
+ * <ul>
+ *   <li><b>Lettura</b>: proprietario, utente con condivisione, oppure itinerario {@code PUBLIC};</li>
+ *   <li><b>Scrittura</b> (tappe e dati dell'itinerario): proprietario, oppure utente con
+ *       condivisione e {@code canEdit = true};</li>
+ *   <li><b>Gestione</b> (visibilita', condivisioni, eliminazione): solo il proprietario.</li>
+ * </ul>
+ *
+ * <p>I metodi che chiamano altri servizi (catalog-service, user-auth-service) non sono
+ * {@code @Transactional}: la chiamata HTTP avviene fuori da qualsiasi transazione e solo
+ * il salvataggio finale gira in una transazione breve tramite {@link TransactionTemplate}.
+ */
 @Service
 public class ItineraryService {
 
@@ -70,9 +84,18 @@ public class ItineraryService {
         this.transactionTemplate = transactionTemplate;
     }
 
+    /**
+     * Crea un nuovo itinerario di cui l'utente diventa proprietario.
+     * Se la visibilita' e' {@code PUBLIC} genera subito il token pubblico.
+     *
+     * @param request dati dell'itinerario (titolo, date, visibilita')
+     * @param ownerId id dell'utente autenticato
+     * @return l'itinerario creato
+     */
     @Transactional
     public ItineraryResponse createItinerary(CreateItineraryRequest request, UUID ownerId) {
-        Visibility visibility = resolveVisibility(request.visibility(), request.isPublic());
+        // Senza visibilita' esplicita l'itinerario nasce privato.
+        Visibility visibility = request.visibility() != null ? request.visibility() : Visibility.PRIVATE;
         Itinerary itinerary = itineraryMapper.toEntity(request, ownerId, visibility);
 
         if (visibility == Visibility.PUBLIC) {
@@ -83,12 +106,24 @@ public class ItineraryService {
         return toResponse(savedItinerary, ownerId);
     }
 
+    /**
+     * Restituisce il dettaglio di un itinerario, se l'utente ha accesso in lettura.
+     *
+     * @throws ResourceNotFoundException se l'itinerario non esiste
+     * @throws AccessDeniedException se l'utente non puo' vederlo
+     */
     @Transactional(readOnly = true)
     public ItineraryResponse getItineraryById(Long itineraryId, UUID userId) {
         Itinerary itinerary = findItineraryWithReadAccess(itineraryId, userId);
         return toResponse(itinerary, userId);
     }
 
+    /**
+     * Restituisce un itinerario pubblico tramite il suo token, senza dati riservati
+     * (proprietario, permessi). Non richiede che il chiamante abbia accesso.
+     *
+     * @throws ResourceNotFoundException se il token non esiste o l'itinerario non e' piu' pubblico
+     */
     @Transactional(readOnly = true)
     public PublicItineraryResponse getPublicItinerary(UUID publicToken) {
         Itinerary itinerary = itineraryRepository
@@ -97,22 +132,14 @@ public class ItineraryService {
         return itineraryMapper.toPublicResponse(itinerary);
     }
 
-    @Transactional(readOnly = true)
-    public List<ItineraryResponse> getItinerariesByOwner(UUID ownerId) {
-        // L'owner puo' sempre modificare i propri itinerari: canEdit = true senza query aggiuntive.
-        return itineraryRepository.findByOwnerId(ownerId)
-                .stream()
-                .map(i -> itineraryMapper.toResponse(i, true))
-                .toList();
-    }
-
-    // Restituisce la lista globale degli itinerari accessibili all'utente:
-    // quelli posseduti (owner_id) piu' quelli condivisi con lui (itinerary_shares).
-    // Un itinerario condiviso resta in lista qualunque sia la sua visibilita' (SHARED
-    // o PUBLIC): l'unico caso escluso e' PRIVATE, dove eventuali share sono stantie.
-    // canEdit e' calcolato dalle share gia' caricate, senza una query per itinerario.
-    // La lettura avviene in un'unica transazione (readOnly) per evitare
-    // LazyInitializationException durante il mapping delle tappe.
+    /**
+     * Restituisce tutti gli itinerari che l'utente vede nella sua lista: quelli di cui e'
+     * proprietario piu' quelli condivisi con lui.
+     *
+     * <p>Gli itinerari condivisi tornati {@code PRIVATE} vengono esclusi (le condivisioni
+     * rimaste sono considerate scadute). {@code canEdit} e' calcolato dalle condivisioni gia'
+     * caricate, senza una query per ogni itinerario.
+     */
     @Transactional(readOnly = true)
     public List<ItineraryResponse> getAllAccessibleItineraries(UUID userId) {
         Map<Long, ItineraryResponse> accessible = new LinkedHashMap<>();
@@ -137,10 +164,18 @@ public class ItineraryService {
         return List.copyOf(accessible.values());
     }
 
-    // Non @Transactional, come shareItinerary: la verifica su catalog-service e' una chiamata
-    // HTTP e non deve tenere aperta una transazione (e una connessione HikariCP).
-    // 1) permessi in una transazione breve, 2) verifica remota dei riferimenti,
-    // 3) salvataggio in una transazione separata.
+    /**
+     * Aggiunge una tappa all'itinerario.
+     *
+     * <p>Flusso in tre fasi: controllo dei permessi, verifica su catalog-service che il
+     * viaggio o l'attivita' esistano (fuori transazione), salvataggio in una transazione breve.
+     * Se la posizione richiesta e' occupata, la tappa viene messa in fondo.
+     *
+     * @throws IllegalArgumentException tipo/riferimenti incoerenti, elemento del catalogo
+     *         inesistente o date fuori dal periodo dell'itinerario (400)
+     * @throws com.tripflow.itinerary_service.exception.CatalogServiceUnavailableException
+     *         se catalog-service non risponde (503)
+     */
     public ItineraryStopResponse addStopToItinerary(Long itineraryId, AddItineraryStopRequest request, UUID userId) {
         transactionTemplate.executeWithoutResult(status -> findItineraryWithWriteAccess(itineraryId, userId));
         validateStopReferences(request.stopType(), request.viaggioId(), request.attivitaId());
@@ -164,8 +199,13 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(savedStop);
     }
 
-    // Stesso schema di addStopToItinerary: se la richiesta porta nuovi riferimenti al
-    // catalogo, li verifica fuori dalla transazione prima di applicare la modifica.
+    /**
+     * Modifica parzialmente una tappa (solo i campi presenti nella richiesta).
+     * Stesso schema di {@link #addStopToItinerary}: eventuali nuovi riferimenti al catalogo
+     * vengono verificati prima di aprire la transazione.
+     *
+     * @throws IllegalStateException se la nuova posizione e' gia' occupata (409)
+     */
     public ItineraryStopResponse updateStop(Long itineraryId, Long stopId, UpdateItineraryStopRequest request, UUID userId) {
         transactionTemplate.executeWithoutResult(status -> findItineraryWithWriteAccess(itineraryId, userId));
         verifyCatalogReferences(request.viaggioId(), request.attivitaId());
@@ -195,6 +235,9 @@ public class ItineraryService {
         return itineraryMapper.toStopResponse(updatedStop);
     }
 
+    /**
+     * Elimina una tappa dall'itinerario (richiede accesso in scrittura).
+     */
     @Transactional
     public void deleteStop(Long itineraryId, Long stopId, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
@@ -215,12 +258,20 @@ public class ItineraryService {
         itineraryStopRepository.delete(stop);
     }
 
+    /**
+     * Elimina l'itinerario con tutte le sue tappe. Solo il proprietario.
+     */
     @Transactional
     public void deleteItinerary(Long itineraryId, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
         itineraryRepository.delete(itinerary);
     }
 
+    /**
+     * Aggiorna titolo, descrizione e date dell'itinerario.
+     *
+     * @throws IllegalArgumentException se le nuove date lascerebbero fuori una tappa esistente
+     */
     @Transactional
     public ItineraryResponse updateItinerary(Long itineraryId, UpdateItineraryRequest request, UUID userId) {
         Itinerary itinerary = findItineraryWithWriteAccess(itineraryId, userId);
@@ -238,15 +289,24 @@ public class ItineraryService {
         return toResponse(updated, userId);
     }
 
+    /**
+     * Cambia la visibilita' dell'itinerario. Solo il proprietario.
+     *
+     * <ul>
+     *   <li>{@code PUBLIC}: genera il token pubblico, se manca;</li>
+     *   <li>{@code PRIVATE}: rimuove il token e tutte le condivisioni;</li>
+     *   <li>{@code SHARED}: rimuove il token, le condivisioni restano.</li>
+     * </ul>
+     */
     @Transactional
     public ItineraryResponse updateVisibility(Long itineraryId, UpdateVisibilityRequest request, UUID userId) {
-        if (request.visibility() == null && request.isPublic() == null) {
-            throw new IllegalArgumentException("Almeno uno tra visibility e isPublic deve essere specificato");
+        if (request.visibility() == null) {
+            throw new IllegalArgumentException("La visibilita' e' obbligatoria");
         }
 
         Itinerary itinerary = findOwnedItinerary(itineraryId, userId);
 
-        Visibility visibility = resolveVisibility(request.visibility(), request.isPublic());
+        Visibility visibility = request.visibility();
         itinerary.setVisibility(visibility);
 
         if (visibility == Visibility.PUBLIC) {
@@ -265,11 +325,15 @@ public class ItineraryService {
         return toResponse(updated, userId);
     }
 
-    // Il metodo NON e' @Transactional: la verifica remota su user-auth-service
-    // deve avvenire senza una transazione (e quindi una connessione HikariCP)
-    // aperta. Il repository findById apre una breve transazione read-only che
-    // viene chiusa prima della chiamata HTTP; solo il salvataggio finale viene
-    // eseguito dentro TransactionTemplate.
+    /**
+     * Condivide l'itinerario con un altro utente. Solo il proprietario.
+     *
+     * <p>Verifica su user-auth-service che l'utente esista (fuori transazione), poi salva la
+     * condivisione. Un itinerario {@code PRIVATE} diventa automaticamente {@code SHARED}.
+     *
+     * @throws IllegalArgumentException condivisione con se stessi o gia' esistente (400)
+     * @throws ResourceNotFoundException se l'utente destinatario non esiste (404)
+     */
     public ItineraryShareResponse shareItinerary(Long itineraryId, ShareItineraryRequest request, UUID ownerId) {
         if (ownerId.equals(request.sharedWithUserId())) {
             throw new IllegalArgumentException("Non puoi condividere un itinerario con te stesso");
@@ -307,6 +371,10 @@ public class ItineraryService {
         return itineraryShareMapper.toResponse(savedShare);
     }
 
+    /**
+     * Revoca la condivisione con un utente. Solo il proprietario.
+     * Se era l'ultima e l'itinerario e' {@code SHARED}, torna {@code PRIVATE}.
+     */
     @Transactional
     public void removeShare(Long itineraryId, UUID sharedWithUserId, UUID ownerId) {
         Itinerary itinerary = findOwnedItinerary(itineraryId, ownerId);
@@ -326,6 +394,9 @@ public class ItineraryService {
         }
     }
 
+    /**
+     * Elenca le persone con cui l'itinerario e' condiviso. Solo il proprietario.
+     */
     @Transactional(readOnly = true)
     public List<ItineraryShareResponse> getShares(Long itineraryId, UUID ownerId) {
         findOwnedItinerary(itineraryId, ownerId);
@@ -366,7 +437,7 @@ public class ItineraryService {
         throw new AccessDeniedException("Not authorized to modify this itinerary");
     }
 
-    private static final java.util.Set<String> STOP_TYPES = java.util.Set.of("TRIP", "ACTIVITY", "CUSTOM");
+    private static final Set<String> STOP_TYPES = Set.of("TRIP", "ACTIVITY", "CUSTOM");
 
     // Controlla la coerenza tipo/riferimenti della tappa prima di arrivare ai vincoli del DB (400 invece di 409).
     private void validateStopReferences(String stopType, UUID viaggioId, UUID attivitaId) {
@@ -407,7 +478,7 @@ public class ItineraryService {
         }
         return itinerary.getStops().stream()
                 .map(ItineraryStop::getStopOrder)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .max(Integer::compare)
                 .orElse(0) + 1;
     }
@@ -429,7 +500,7 @@ public class ItineraryService {
             return;
         }
         boolean taken = itinerary.getStops().stream()
-                .anyMatch(s -> stopOrder.equals(s.getStopOrder()) && !java.util.Objects.equals(s.getId(), excludedStopId));
+                .anyMatch(s -> stopOrder.equals(s.getStopOrder()) && !Objects.equals(s.getId(), excludedStopId));
         if (taken) {
             throw new IllegalStateException(
                     "Esiste gia' una tappa con stopOrder " + stopOrder + " in questo itinerario");
@@ -437,10 +508,10 @@ public class ItineraryService {
     }
 
     // Le date della tappa devono ricadere nel range dell'itinerario (se definito).
-    private void validateStopWithinItinerary(Itinerary itinerary, java.time.LocalDateTime start, java.time.LocalDateTime end) {
-        java.time.LocalDate from = itinerary.getStartDate();
-        java.time.LocalDate to = itinerary.getEndDate();
-        for (java.time.LocalDateTime value : new java.time.LocalDateTime[]{start, end}) {
+    private void validateStopWithinItinerary(Itinerary itinerary, LocalDateTime start, LocalDateTime end) {
+        LocalDate from = itinerary.getStartDate();
+        LocalDate to = itinerary.getEndDate();
+        for (LocalDateTime value : new LocalDateTime[]{start, end}) {
             if (value == null) {
                 continue;
             }
@@ -485,13 +556,4 @@ public class ItineraryService {
         return share.isPresent() && share.get().isCanEdit();
     }
 
-    private Visibility resolveVisibility(Visibility visibility, Boolean isPublic) {
-        if (visibility != null) {
-            return visibility;
-        }
-        if (isPublic != null) {
-            return isPublic ? Visibility.PUBLIC : Visibility.PRIVATE;
-        }
-        return Visibility.PRIVATE;
-    }
 }

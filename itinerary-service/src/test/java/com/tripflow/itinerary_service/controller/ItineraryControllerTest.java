@@ -183,17 +183,6 @@ class ItineraryControllerTest {
                 .andExpect(jsonPath("$.message").value("Public itinerary not found"));
     }
 
-    @Test
-    void getItinerariesByOwner_usaOwnerDalToken_200() throws Exception {
-        when(itineraryService.getItinerariesByOwner(OWNER_ID)).thenReturn(List.of(privateItinerary()));
-
-        mockMvc.perform(get("/api/itineraries/mie")
-                        .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].ownerId").value(OWNER_SUB));
-
-        verify(itineraryService).getItinerariesByOwner(OWNER_ID);
-    }
 
     @Test
     void getAllItineraries_restituiscePossedutiECondivisi_200() throws Exception {
@@ -210,40 +199,7 @@ class ItineraryControllerTest {
         verify(itineraryService).getAllAccessibleItineraries(OWNER_ID);
     }
 
-    @Test
-    void createItinerary_conSoloIsPublic_201() throws Exception {
-        when(itineraryService.createItinerary(any(), eq(OWNER_ID))).thenReturn(publicItinerary());
 
-        String body = """
-                {
-                  "title": "Solo booleano",
-                  "isPublic": true,
-                  "startDate": "2030-09-01",
-                  "endDate": "2030-09-03"
-                }
-                """;
-
-        mockMvc.perform(post("/api/itineraries")
-                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
-                .andExpect(status().isCreated());
-
-        verify(itineraryService).createItinerary(any(), eq(OWNER_ID));
-    }
-
-    @Test
-    void updateVisibility_conSoloIsPublic_200() throws Exception {
-        when(itineraryService.updateVisibility(eq(1L), any(), eq(OWNER_ID))).thenReturn(publicItinerary());
-
-        mockMvc.perform(patch("/api/itineraries/1/visibility")
-                        .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"isPublic\":true}"))
-                .andExpect(status().isOk());
-
-        verify(itineraryService).updateVisibility(eq(1L), any(), eq(OWNER_ID));
-    }
 
     @Test
     void updateVisibility_senzaCampi_400() throws Exception {
@@ -253,7 +209,7 @@ class ItineraryControllerTest {
                         .content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString(
-                        "Almeno uno tra visibility e isPublic deve essere specificato")));
+                        "La visibilita' e' obbligatoria")));
 
         verify(itineraryService, never()).updateVisibility(any(), any(), any());
     }
@@ -490,7 +446,7 @@ class ItineraryControllerTest {
 
     @Test
     void endpointSenzaToken_401() throws Exception {
-        mockMvc.perform(get("/api/itineraries/mie"))
+        mockMvc.perform(get("/api/itineraries"))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -512,9 +468,9 @@ class ItineraryControllerTest {
 
     @Test
     void richiestaConOrigin_daGateway_esponeAccessControlAllowOrigin() throws Exception {
-        when(itineraryService.getItinerariesByOwner(any(UUID.class))).thenReturn(List.of());
+        when(itineraryService.getAllAccessibleItineraries(any(UUID.class))).thenReturn(List.of());
 
-        mockMvc.perform(get("/api/itineraries/mie")
+        mockMvc.perform(get("/api/itineraries")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB)))
                         .header(HttpHeaders.ORIGIN, "http://localhost:8080"))
                 .andExpect(status().isOk())
@@ -586,10 +542,10 @@ class ItineraryControllerTest {
 
     @Test
     void erroreInterno_500ConMessaggioGenerico() throws Exception {
-        when(itineraryService.getItinerariesByOwner(any(UUID.class)))
+        when(itineraryService.getAllAccessibleItineraries(any(UUID.class)))
                 .thenThrow(new RuntimeException("dettaglio interno non esposto"));
 
-        mockMvc.perform(get("/api/itineraries/mie")
+        mockMvc.perform(get("/api/itineraries")
                         .with(jwt().jwt(j -> j.subject(OWNER_SUB))))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("Errore interno del server"));

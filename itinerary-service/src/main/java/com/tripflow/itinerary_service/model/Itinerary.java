@@ -6,11 +6,18 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-//si occuperà lombok per fare getter e setter in maniera automatico.
+/**
+ * Itinerario di un utente (tabella {@code itineraries}).
+ *
+ * <p>Possiede le sue tappe: salvandolo o eliminandolo si salvano o eliminano anche loro.
+ * {@code publicToken} esiste solo quando la visibilita' e' {@code PUBLIC}.
+ * I timestamp sono in UTC e vengono impostati automaticamente.
+ */
 @Getter
 @Setter
 @Entity
@@ -49,7 +56,7 @@ public class Itinerary {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    // Relazione con itinerary-stops.
+    // Tappe in ordine di stopOrder; rimuoverne una dalla lista la elimina dal DB.
     @OneToMany(
             mappedBy = "itinerary",
             cascade = CascadeType.ALL,
@@ -58,22 +65,21 @@ public class Itinerary {
     @OrderBy("stopOrder ASC")
     private List<ItineraryStop> stops = new ArrayList<>();
 
-    // Costruttore vuoto
     public Itinerary() {
     }
 
-    // viene eseguito prima di salvare per la prima volta un oggetto nel DB
+    /** Imposta i timestamp al primo salvataggio. */
     @PrePersist
     public void prePersist() {
         // Timestamp sempre in UTC: la conversione in ora locale spetta al client.
-        createdAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
-        updatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        createdAt = LocalDateTime.now(ZoneOffset.UTC);
+        updatedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
-    // viene eseguito prima di aggiornare un oggetto nel DB
+    /** Aggiorna {@code updatedAt} a ogni modifica. */
     @PreUpdate
     public void preUpdate() {
-        updatedAt = LocalDateTime.now(java.time.ZoneOffset.UTC);
+        updatedAt = LocalDateTime.now(ZoneOffset.UTC);
     }
 
 

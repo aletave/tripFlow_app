@@ -8,6 +8,10 @@ import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+/**
+ * Logica di {@link DateRange}: legge i due campi del DTO (record o classe con getter)
+ * e controlla che la fine non preceda l'inizio.
+ */
 public class DateRangeValidator implements ConstraintValidator<DateRange, Object> {
 
     private String startField;

@@ -9,9 +9,13 @@ import org.springframework.web.client.RestClientException;
 
 import java.util.UUID;
 
-// Client inter-servizio verso catalog-service: verifica che viaggi e attivita'
-// referenziati da una tappa esistano davvero prima di salvarla.
-// Il RestClient (con timeout espliciti) arriva da CatalogClientConfig.
+/**
+ * Client verso catalog-service: verifica che viaggi e attivita' citati da una tappa
+ * esistano davvero prima di salvarla.
+ *
+ * <p>Il {@link RestClient} (con timeout espliciti) arriva da
+ * {@link com.tripflow.itinerary_service.config.CatalogClientConfig}.
+ */
 @Component
 public class CatalogClient {
 
@@ -21,16 +25,24 @@ public class CatalogClient {
         this.restClient = restClient;
     }
 
+    /**
+     * @return {@code true} se il viaggio esiste, {@code false} se il catalogo risponde 404
+     * @throws CatalogServiceUnavailableException se il catalogo non risponde o da' un errore
+     */
     public boolean tripExists(UUID tripId) {
         return exists("/api/v1/trips/{id}", tripId, "viaggio");
     }
 
+    /**
+     * @return {@code true} se l'attivita' esiste, {@code false} se il catalogo risponde 404
+     * @throws CatalogServiceUnavailableException se il catalogo non risponde o da' un errore
+     */
     public boolean activityExists(UUID activityId) {
         return exists("/api/v1/activities/{id}", activityId, "attivita'");
     }
 
-    // true se il catalogo risponde 200, false se 404. Timeout, errori di rete e 5xx
-    // diventano CatalogServiceUnavailableException (503).
+    // 200 -> true, 404 -> false. Timeout, errori di rete e 5xx diventano
+    // CatalogServiceUnavailableException (503).
     private boolean exists(String path, UUID id, String label) {
         try {
             restClient.get()

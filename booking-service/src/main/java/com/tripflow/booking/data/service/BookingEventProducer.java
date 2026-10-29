@@ -5,6 +5,7 @@ import com.tripflow.booking.data.dao.PrenotazioneRepository;
 import com.tripflow.booking.data.messages.BookingMessageDTO;
 import com.tripflow.booking.data.messages.EventDTO;
 import com.tripflow.booking.data.entities.Prenotazione;
+import com.tripflow.booking.data.entities.PrenotazioneAttivita;
 import com.tripflow.booking.data.service.events.PagamentoCompletatoEvent;
 import com.tripflow.booking.data.service.events.PrenotazioneAnnullataEvent;
 import com.tripflow.booking.exception.PrenotazioneNotFoundException;
@@ -16,6 +17,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -41,12 +44,18 @@ public class BookingEventProducer {
 
     private void pubblica(UUID prenotazioneId, String eventType, String routingKey) {
 
-        Prenotazione prenotazione = prenotazioneRepository.findById(prenotazioneId)
+        Prenotazione prenotazione = prenotazioneRepository.trovaConAttivita(prenotazioneId)
                 .orElseThrow(() -> new PrenotazioneNotFoundException(prenotazioneId));
+
+        List<UUID> attivitaIds = new ArrayList<>();
+        for (PrenotazioneAttivita attivita : prenotazione.getAttivitaSelezionate()) {
+            attivitaIds.add(attivita.getAttivitaId());
+        }
 
         BookingMessageDTO payload = new BookingMessageDTO(
                 prenotazione.getViaggioId(),
-                prenotazione.getNumeroPartecipanti()
+                prenotazione.getNumeroPartecipanti(),
+                attivitaIds
         );
 
         try {

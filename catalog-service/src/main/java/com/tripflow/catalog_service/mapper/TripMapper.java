@@ -49,7 +49,9 @@ public class TripMapper {
         dto.setDescription(activity.getDescription());
         dto.setDuration(activity.getDuration());
         dto.setPrice(activity.getPrice());
-        dto.setAvailableSpots(activity.getAvailableSpots());
+        int booked = activity.getBookedSpots() != null ? activity.getBookedSpots() : 0;
+        dto.setTotalSpots(activity.getAvailableSpots());
+        dto.setAvailableSpots(activity.getAvailableSpots() - booked);
         if (activity.getTrip() != null) {
             dto.setTripId(activity.getTrip().getId());
         }

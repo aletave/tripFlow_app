@@ -43,6 +43,11 @@ public class Activity {
 
     @Getter
     @Setter
+    @Column(name = "booked_spots")
+    private Integer bookedSpots = 0;
+
+    @Getter
+    @Setter
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "trip_id", nullable = false)
     private Trip trip;
